@@ -1,0 +1,141 @@
+class SliverSearchAppBar extends SliverPersistentHeaderDelegate {
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    var adjustedShrinkOffset =
+        shrinkOffset > minExtent ? minExtent : shrinkOffset;
+    double offset = (minExtent - adjustedShrinkOffset) * 0.5;
+    double centerOffset = (maxExtent - adjustedShrinkOffset) * 0.5;
+    double topPadding = MediaQuery.of(context).padding.top + 16;
+    return Stack(
+      children: [
+        SizedBox(
+          child: ClipPath(
+              clipper: BackgroundWaveClipper(),
+              child: Container(
+                width: MediaQuery.of(context).size.width,
+                height: 280,
+                decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                  // colors: [Color(0xFFFACCCC), Color(0xFFF6EFE9)],
+                  colors: [Color(0xFF607D8B), Color(0xFF455A64)],
+                )),
+              )),
+        ),
+        Positioned(
+            top: topPadding + centerOffset * 0.5,
+            left: 16,
+            right: 16,
+            child: const CustomSearchBar()),
+      ],
+    );
+  }
+
+  @override
+  double get maxExtent => 200;
+
+  @override
+  double get minExtent => 100;
+
+  @override
+  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) =>
+      oldDelegate.maxExtent != maxExtent;
+}
+
+class BackgroundWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    var path = Path();
+
+    const minSize = 100.0;
+
+    // when h = max = 280
+    // h = 280, p1 = 210, p1Diff = 70
+    // when h = min = 140
+    // h = 140, p1 = 140, p1Diff = 0
+    final p1Diff = ((minSize - size.height) * 0.5).truncate().abs();
+    path.lineTo(0.0, size.height - p1Diff);
+
+    final controlPoint = Offset(size.width * 0.4, size.height);
+    final endPoint = Offset(size.width, minSize);
+
+    path.quadraticBezierTo(
+        controlPoint.dx, controlPoint.dy, endPoint.dx, endPoint.dy);
+
+    path.lineTo(size.width, 0.0);
+    path.close();
+
+    return path;
+  }
+
+  @override
+  bool shouldReclip(BackgroundWaveClipper oldClipper) => oldClipper != this;
+}
+
+
+
+
+// Sliver with Staggered Grid 
+//================================
+SliverPadding(
+              padding: const EdgeInsets.all(18),
+              sliver: SliverToBoxAdapter(
+                child: StaggeredGrid.count(
+                    crossAxisCount: 4,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    // itemCount: 20,
+                    children: [
+                      // itemBuilder: (BuildContext context, int index) {
+                      for (int i = 0; i < 20; i++)
+                        StaggeredGridTile.count(
+                          crossAxisCellCount: _tileCounts[i % 7][0],
+                          mainAxisCellCount: _tileCounts[i % 7][1],
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: ShapeDecoration(
+                                shape: SmoothRectangleBorder(
+                                    side: const BorderSide(
+                                      color: Color(0xFF5f6368),
+                                      width: 1.5,
+                                    ),
+                                    borderAlign: BorderAlign.outside,
+                                    borderRadius: SmoothBorderRadius(
+                                        cornerRadius: 16, cornerSmoothing: 0))),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (i % 2 == 0) ...[
+                                    const Text(
+                                      "Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1Note 1",
+                                      style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    const Text(
+                                      "Note content",
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ] else ...[
+                                    Text(
+                                      "Note $i",
+                                      style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      "Short content",
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                    ]),
+              ))

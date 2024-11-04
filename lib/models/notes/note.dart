@@ -1,0 +1,182 @@
+// To parse this JSON data, do
+//
+//     final note = noteFromJson(jsonString);
+
+import 'dart:convert';
+import 'package:flutter/material.dart';
+
+Note noteFromJson(String str) => Note.fromJson(json.decode(str));
+
+String noteToJson(Note data) => json.encode(data.toJson());
+
+class Note {
+  String id;
+  String title;
+  Color? color;
+  DateTime createdAt;
+  DateTime updatedAt;
+  String content = '';
+  List<NoteImage> images = [];
+  Reminder? reminder;
+  List<String>? labels;
+
+  Note({
+    required this.id,
+    required this.title,
+    this.color,
+    required this.createdAt,
+    required this.updatedAt,
+    this.content = '',
+    this.images = const [],
+    this.reminder,
+    this.labels,
+  });
+  factory Note.empty() => Note(
+        id: '',
+        title: '',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+  Note copyWith({
+    String? id,
+    String? title,
+    Color? color,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? content,
+    List<NoteImage>? images,
+    Reminder? reminder,
+    List<String>? labels,
+  }) =>
+      Note(
+        id: id ?? this.id,
+        title: title ?? this.title,
+        color: color ?? this.color,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+        content: content ?? this.content,
+        images: images ?? this.images,
+        reminder: reminder ?? this.reminder,
+        labels: labels ?? this.labels,
+      );
+
+  @override
+  String toString() {
+    return 'Note{id: $id, title: $title, color: $color, createdAt: $createdAt, updatedAt: $updatedAt, images: $images, reminder: $reminder, labels: $labels}';
+  }
+
+  factory Note.fromJson(Map<String, dynamic> json) => Note(
+        id: json["id"],
+        title: json["title"],
+        color: json["color"],
+        createdAt: DateTime.parse(json["createdAt"]),
+        updatedAt: DateTime.parse(json["updatedAt"]),
+        content: json["content"],
+        images: List<NoteImage>.from(
+            json["images"].map((x) => NoteImage.fromJson(x))),
+        reminder: Reminder.fromJson(json["reminder"]),
+        labels: List<String>.from(json["labels"].map((x) => x)),
+      );
+
+  Map<String, dynamic> toJson() => {
+        "id": id,
+        "title": title,
+        "color": color,
+        "createdAt": createdAt.toIso8601String(),
+        "updatedAt": updatedAt.toIso8601String(),
+        "content": content,
+        "images": List<dynamic>.from(images.map((x) => x.toJson())),
+        "reminder": reminder?.toJson(),
+        "labels":
+            labels != null ? List<dynamic>.from(labels!.map((x) => x)) : []
+      };
+}
+
+class NoteImage {
+  String type;
+  String? url;
+  String? path;
+
+  NoteImage({
+    required this.type,
+    this.url,
+    this.path,
+  });
+
+  NoteImage copyWith({
+    String? type,
+    String? url,
+    String? path,
+  }) =>
+      NoteImage(
+        type: type ?? this.type,
+        url: url ?? this.url,
+        path: path ?? this.path,
+      );
+
+  factory NoteImage.fromJson(Map<String, dynamic> json) => NoteImage(
+        type: json["type"],
+        url: json["url"],
+        path: json["path"],
+      );
+
+  Map<String, dynamic> toJson() => {
+        "type": type,
+        "url": url,
+        "path": path,
+      };
+}
+
+class Reminder {
+  DateTime time;
+  String recurrence;
+
+  Reminder({
+    required this.time,
+    required this.recurrence,
+  });
+
+  Reminder copyWith({
+    DateTime? time,
+    String? recurrence,
+  }) =>
+      Reminder(
+        time: time ?? this.time,
+        recurrence: recurrence ?? this.recurrence,
+      );
+
+  factory Reminder.fromJson(Map<String, dynamic> json) => Reminder(
+        time: DateTime.parse(json["time"]),
+        recurrence: json["recurrence"],
+      );
+
+  Map<String, dynamic> toJson() => {
+        "time": time.toIso8601String(),
+        "recurrence": recurrence,
+      };
+}
+
+
+// {
+//   "id": "550e8400-e29b-41d4-a716-446655440000",
+//   "title": "Sample Note",
+//   "color": "#FFFFFF",
+//   "createdAt": "2023-10-01T12:00:00Z",
+//   "updatedAt": "2023-10-01T12:00:00Z",
+//   "content": "This is a sample note content.",
+//   "images": [
+//     {
+//       "type": "remote",
+//       "url": "https://example.com/image1.jpg"
+//     },
+//     {
+//       "type": "local",
+//       "path": "/path/to/local/image.jpg"
+//     }
+//   ],
+//   "reminder": {
+//     "time": "2023-10-02T09:00:00Z",
+//     "recurrence": "daily"
+//   },
+//   "labels": ["work", "urgent"]
+// }
