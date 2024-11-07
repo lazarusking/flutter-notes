@@ -1,5 +1,7 @@
 import 'package:figma_squircle/figma_squircle.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -7,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:notes/models/notes/note.dart';
 import 'package:notes/presentation/notes_provider.dart';
 import 'package:notes/presentation/screens/note_screen.dart';
+import 'package:notes/widgets/color_picker.dart';
 import 'package:notes/widgets/search_bar.dart';
 
 final _tileCounts = [
@@ -118,6 +121,18 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _toggleSearchBar() {
     setState(() {
       _isSearchBarVisible = !_isSearchBarVisible;
+      // if (_isSearchBarVisible) {
+      //   Navigator.push(
+      //       context,
+      //       PageRouteBuilder(
+      //           barrierDismissible: true,
+      //           opaque: false,
+      //           pageBuilder: (_, anim1, anim2) => const HomePage(),
+      //           settings: RouteSettings(arguments: _isSearchBarVisible)));
+      // } else {
+      //   Navigator.pop(context);
+      // }
+      ref.read(searchQueryProvider.notifier).state = '';
     });
   }
 
@@ -145,117 +160,93 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
   }
 
+  void _showColorPicker() {
+    showAdaptiveDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.black.withOpacity(0.8),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10))),
+          child: Container(
+            padding: EdgeInsets.all(16),
+            constraints: BoxConstraints(maxHeight: 400, maxWidth: 300),
+            child: ColorPicker(
+              isBlockStyle: true,
+              selectedColor: Colors.transparent,
+              onColorSelected: (color) {
+                setState(() {
+                  for (final id in selectedGrids) {
+                    final note =
+                        ref.read(notesProvider.notifier).getNoteById(id);
+                    if (note != null) {
+                      final updatedNote = note.copyWith(color: color);
+                      ref.read(notesProvider.notifier).updateNote(updatedNote);
+                    }
+                  }
+                  selectedGrids.clear();
+                  Navigator.of(context).pop();
+                });
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final searchQuery = ref.watch(searchQueryProvider);
-    final notesNotifier = ref.read(notesProvider.notifier);
-    final notesState = ref.read(notesProvider);
-    final List<Note> notes = ref.watch(notesProvider).where((note) {
-      return note.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          note.content.toLowerCase().contains(searchQuery.toLowerCase());
-    }).toList();
-    print(searchQuery);
-    // print(notes.length);
-    if (notesState.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('Notes', style: GoogleFonts.comfortaa(fontSize: 25)),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.search),
-              onPressed: _toggleSearchBar,
-            ),
-          ],
-        ),
-        body: Center(
-          child: Text(
-            'No notes available',
-            style: GoogleFonts.comfortaa(fontSize: 18),
-          ),
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            // Add new note action
-            String title = '';
-            String content = '';
-            final newnote = notesNotifier.createNote(title, content);
-            print(newnote);
-            Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => NoteScreen(note: newnote),
-                ));
-          },
-          child: Icon(Icons.add),
-        ),
-      );
-    }
+    final List<Note> notes = ref.watch(notesProvider);
+    final filteredNotes =
+        ref.read(notesProvider.notifier).searchNotes(searchQuery);
 
     return Scaffold(
         // backgroundColor: Colors.deepPurple,
-        floatingActionButton: FloatingActionButton(
-            onPressed: () {
-              // debugPaintSizeEnabled = !debugPaintSizeEnabled;
-              String title = '';
-              String content = '';
-              final newnote = notesNotifier.createNote(title, content);
-              print(newnote);
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => NoteScreen(note: newnote),
-                  ));
-            },
-            child: const Icon(Icons.add)),
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 30.0, right: 0),
+          child: FloatingActionButton(
+              backgroundColor: Colors.black,
+              shape: const CircleBorder(),
+              onPressed: () {
+                if (kDebugMode) {
+                  debugPaintSizeEnabled = !debugPaintSizeEnabled;
+                }
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => NoteScreen(note: Note.empty()),
+                    ));
+              },
+              child: const Icon(Icons.add, color: Colors.white)),
+        ),
         body: SafeArea(
-            minimum: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+            // minimum: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
             child: CustomScrollView(slivers: [
-              // SliverPersistentHeader(
-              //   delegate: SliverSearchAppBar(),
-              //   // pinned: true,
-              // ),
-              notesSliverAppBar(context),
-              SliverPadding(
-                padding: const EdgeInsets.all(10),
-                sliver: notes.isEmpty
-                    ? SliverToBoxAdapter(
-                        child: Center(
-                          child: Text(
-                            'No notes available',
-                            style: GoogleFonts.comfortaa(fontSize: 18),
-                          ),
-                        ),
-                      )
-                    : NoteSliverMasonryGrid(
-                        notes: notes,
-                        selectedGrids: selectedGrids,
-                        onSelect: onSelect,
+          // SliverPersistentHeader(
+          //   delegate: SliverSearchAppBar(),
+          //   // pinned: true,
+          // ),
+          notesSliverAppBar(context),
+          SliverPadding(
+            padding: const EdgeInsets.all(10),
+            sliver: notes.isEmpty
+                ? SliverFillRemaining(
+                    child: Center(
+                      child: Text(
+                        'No notes available',
+                        style: GoogleFonts.comfortaa(fontSize: 18),
                       ),
-              ),
-              // SliverList(
-              //   delegate: SliverChildBuilderDelegate((context, index) {
-              //     // return
-              //     return Container(
-              //         margin: const EdgeInsets.all(10),
-              //         padding: const EdgeInsets.all(15),
-              //         decoration: ShapeDecoration(
-              //             gradient: const LinearGradient(colors: [
-              //               Color(0xFFFF4286),
-              //               Color(0xFFFF6666),
-              //             ]),
-              //             shape: SmoothRectangleBorder(
-              //
-              //     borderAlign: BorderAlign.outside,
-              //                 borderRadius: SmoothBorderRadius(
-              //                     cornerRadius: 16, cornerSmoothing: 0))),
-              //         child: const Padding(
-              //             padding: EdgeInsets.all(12.0),
-              //             child: const Column(
-              //                 crossAxisAlignment: CrossAxisAlignment.start,
-              //                 children: [Text('data')])));
-              //   }),
-              // ),
-            ])));
+                    ),
+                  )
+                : NoteSliverMasonryGrid(
+                    notes: filteredNotes,
+                    selectedGrids: selectedGrids,
+                    onSelect: onSelect,
+                  ),
+          ),
+        ])));
   }
 
   SliverPadding notesSliverAppBar(BuildContext context) {
@@ -299,18 +290,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                     // ref
                     //     .read(notesProvider.notifier)
                     //     .archiveNotes(selectedGrids);
-                    setState(() {
-                      selectedGrids.clear();
-                    });
+                    // setState(() {
+                    //   selectedGrids.clear();
+                    // });
                   },
                 ),
                 IconButton(
                   icon: const Icon(Icons.color_lens),
                   onPressed: () {
-                    // ref.read(notesProvider.notifier).archiveNotes(selectedGrids);
-                    // setState(() {
-                    //   selectedGrids.clear();
-                    // });
+                    _showColorPicker();
                   },
                 ),
               ],
@@ -328,78 +316,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                 surfaceTintColor: Colors.transparent,
                 // backgroundColor: Colors.black45,
                 pinned: true,
-                // shape: ShapeBorder.lerp(
-                //     const RoundedRectangleBorder(
-                //         borderRadius: BorderRadius.only(
-                //             bottomLeft: Radius.circular(20),
-                //             bottomRight: Radius.circular(20))),
-                //     const RoundedRectangleBorder(
-                //         borderRadius: BorderRadius.only(
-                //             bottomLeft: Radius.circular(20),
-                //             bottomRight: Radius.circular(20))),
-                //     0.5),
-                // flexibleSpace: LayoutBuilder(
-                //   builder: (BuildContext context, BoxConstraints constraints) {
-                //     // Calculate the opacity based on scroll position
-                //     double top = constraints.biggest.height;
-                //     double opacity =
-                //         (top - kToolbarHeight) / (200 - kToolbarHeight);
-
-                //     return FlexibleSpaceBar(
-                //       centerTitle: true,
-                //       title: Opacity(
-                //         opacity: opacity.clamp(0.0, 1.0),
-                //         child: Row(
-                //           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                //           children: const [
-                //             Text(
-                //               "Notes",
-                //               style: TextStyle(
-                //                 color: Colors.white,
-                //                 fontSize: 16,
-                //               ),
-                //             ),
-                //             Icon(
-                //               Icons.search,
-                //               color: Colors.white,
-                //             ),
-                //           ],
-                //         ),
-                //       ),
-                //       background: Container(
-                //         decoration: const BoxDecoration(
-                //           gradient: LinearGradient(
-                //             colors: [Color(0xFF607D8B), Color(0xFF455A64)],
-                //             begin: Alignment.topCenter,
-                //             end: Alignment.bottomCenter,
-                //           ),
-                //         ),
-                //         child: const Center(
-                //           child: Column(
-                //             mainAxisAlignment: MainAxisAlignment.center,
-                //             children: [
-                //               Icon(
-                //                 Icons.pets,
-                //                 size: 80,
-                //                 color: Colors.white,
-                //               ),
-                //               SizedBox(height: 8),
-                //               Text(
-                //                 "Start brand search",
-                //                 style: TextStyle(
-                //                     color: Colors.white, fontSize: 20),
-                //               ),
-                //             ],
-                //           ),
-                //         ),
-                //       ),
-                //     );
-                //   },
-                // ),
-                // leading: _isSearchBarVisible
-                //     ? BackButton(onPressed: _toggleSearchBar)
-                //     : null,
-                //remove unnecassary customsearch
                 title: AnimatedSwitcher(
                   // key: const ValueKey('title'),
                   // switchInCurve: Curves.bounceIn,
@@ -427,8 +343,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             textAlign: TextAlign.left,
                             key: const ValueKey('title'),
                             style: GoogleFonts.comfortaa(
-                              fontSize: 25,
-                            ),
+                                fontSize: 25, color: Colors.white),
                           ),
                         ),
                 ),
@@ -437,8 +352,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                     : [
                         Container(
                           // padding: const EdgeInsets.all(10),
-                          // margin: const EdgeInsets.symmetric(
-                          //     horizontal: 10, vertical: 10),
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 15, vertical: 10),
                           // decoration: BoxDecoration(
                           //     color: Colors.white.withOpacity(0.1),
                           //     borderRadius: BorderRadius.circular(8)),
@@ -477,17 +392,22 @@ class NoteSliverMasonryGrid extends StatelessWidget {
         crossAxisCount: 2,
       ),
       // crossAxisCount: 2,
-      mainAxisSpacing: 16,
-      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 14,
       // childCount: 20,
       delegate: SliverChildBuilderDelegate(
         childCount: notes.length,
         (BuildContext context, int index) {
-          var id = notes[index].id;
+          final note = notes[index];
+          final id = notes[index].id;
           final isSelected = selectedGrids.contains(id);
 
           return InkWell(
             enableFeedback: true,
+            splashColor: note.color,
+            highlightColor: Colors.transparent,
+            focusColor: Colors.transparent,
+            borderRadius: BorderRadius.all(Radius.circular(12)),
             onTap: () {
               if (selectedGrids.isNotEmpty) {
                 onSelect(id);
@@ -495,7 +415,7 @@ class NoteSliverMasonryGrid extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => NoteScreen(note: notes[index]),
+                    builder: (context) => NoteScreen(note: note),
                   ),
                 );
               }
@@ -505,59 +425,60 @@ class NoteSliverMasonryGrid extends StatelessWidget {
               print(selectedGrids);
               onSelect(id);
             },
-            // splashColor: Colors.grey, // splash color
             child: Ink(
-              child: GridTile(
-                child: Container(
-                  // margin: const EdgeInsets.fromLTRB(0, 0, 10, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+              decoration: ShapeDecoration(
+                  // color: _getNoteColor(index),
+                  // color: Color(0xff77172e),
+                  // color: notes[index].color ?? Color(0xFF5f6368),
+                  color: note.color,
+                  shape: SmoothRectangleBorder(
+                      side: BorderSide(
+                        color: isSelected
+                            ? Color(0xFFD2D4D7)
+                            : note.color == defaultColor
+                                ? Color(0xFF5f6368)
+                                : note.color!,
+                        width: 2,
+                      ),
+                      borderAlign: BorderAlign.inside,
+                      borderRadius: SmoothBorderRadius(
+                          cornerRadius: 10, cornerSmoothing: 0))),
+              child: Transform.scale(
+                scale: isSelected ? 1.009 : 1.0,
+                child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  // padding: EdgeInsets.all(isSelected ? 1 : 0),
-
-                  decoration: ShapeDecoration(
-                      // gradient: const LinearGradient(colors: [
-                      //   Color(0xFFFF4286),
-                      //   Color(0xFFFF6666),
-                      // ]),
-                      // color: _getNoteColor(index),
-                      // color: Color(0xff77172e),
-                      color: notes[index].color ?? Color(0xFF5f6368),
-                      // color: Colors.red.withOpacity(0.75),
-                      shape: SmoothRectangleBorder(
-                          side: BorderSide(
-                            color: isSelected
-                                ? Colors.grey
-                                : notes[index].color ?? Color(0xFF5f6368),
-                            width: isSelected ? 2 : 0,
-                          ),
-                          borderAlign: BorderAlign.inside,
-                          borderRadius: SmoothBorderRadius(
-                              cornerRadius: 10, cornerSmoothing: 0))),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          notes[index].title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                            // color: Color(0xFFe8eaed)
-                          ),
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 15),
+                  child: GridTile(
+                      child: Hero(
+                    tag: note.id,
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              note.title,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                                // color: Color(0xFFe8eaed)
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              note.content,
+                              style: TextStyle(
+                                  fontSize: 16, color: Color(0xFFe8eaed)),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 12,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          notes[index].content,
-                          style:
-                              TextStyle(fontSize: 16, color: Color(0xFFe8eaed)),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 12,
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  )),
                 ),
               ),
             ),
@@ -634,32 +555,6 @@ class NotesMasonry extends StatelessWidget {
                 ),
               ),
             ),
-            // onTap: () {
-            //   Navigator.push(
-            //       context,
-            //       MaterialPageRoute(
-            //           builder: (context) => NoteWidget(
-            //                   note: Note(
-            //                 id: "1",
-            //                 title: "Note 1",
-            //                 content: "Note content",
-            //                 color: "blue",
-            //                 createdAt: DateTime.now(),
-            //                 updatedAt: DateTime.now(),
-            //                 todos: [
-            //                   Todo(
-            //                     id: "1",
-            //                     task: "Todo 1",
-            //                     completed: false,
-            //                   ),
-            //                   Todo(
-            //                     id: "2",
-            //                     task: "Todo 2",
-            //                     completed: true,
-            //                   ),
-            //                 ],
-            //               ))));
-            // },
           );
         });
   }

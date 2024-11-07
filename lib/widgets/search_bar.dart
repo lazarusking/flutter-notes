@@ -50,9 +50,7 @@ class _CustomSearchBarState extends ConsumerState<CustomSearchBar> {
               ? IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.grey),
                   onPressed: () {
-                    // FocusScope.of(context).unfocus();
                     _focusNode.unfocus();
-
                     widget.onCancel();
                   },
                 )
