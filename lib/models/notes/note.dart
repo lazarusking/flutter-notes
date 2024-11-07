@@ -32,11 +32,11 @@ class Note {
     this.labels,
   });
   factory Note.empty() => Note(
-        id: '',
-        title: '',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      id: '',
+      title: '',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      color: Color(0xFF202124));
   Note copyWith({
     String? id,
     String? title,
