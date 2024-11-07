@@ -4,18 +4,28 @@ import 'package:notes/models/notes/note.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:math';
 
-final colors = [
-  Color(0xFF77172E), // Coral
-  Color(0xFF692B17), // Peach
-  Color(0xFF9AA0A6), // Sand
-  Color(0xFF264D3B), // Mint
-  Color(0xFF0C625D), // Sage
-  Color(0xFF256377), // Fog
-  Color(0xFF284255), // Storm
-  Color(0xFF472E5B), // Dusk
-  Color(0xFF6C394F), // Blossom
-  Color(0xFF4B443A), // Clay
-];
+const colors = {
+  'coral': Color(0xFF77172E),
+  'peach': Color(0xFF692B17),
+  'sand': Color(0xFF7C4A03),
+  'mint': Color(0xFF264D3B),
+  'sage': Color(0xFF0C625D),
+  'fog': Color(0xFF256377),
+  'storm': Color(0xFF284255),
+  'dusk': Color(0xFF472E5B),
+  'blossom': Color(0xFF6C394F),
+  'clay': Color(0xFF4B443A),
+  'chalk': Color(0xFF232427)
+};
+final defaultColor = Color(0xFF202124);
+
+String getColorName(Color color) {
+  return colors.entries
+      .firstWhere((entry) => entry.value == color,
+          orElse: () => MapEntry('unknown', Colors.transparent))
+      .key;
+}
+
 Color _getNoteColor(int index) {
   // final colors = [
   //   Colors.orange[100],
@@ -26,7 +36,7 @@ Color _getNoteColor(int index) {
   //   Colors.pink[100]
   // ];
 
-  return colors[index % colors.length];
+  return colors.values.elementAt(index % colors.length);
 }
 
 final _uuid = Uuid();
@@ -47,6 +57,14 @@ class NotesNotifier extends Notifier<List<Note>> {
 
   List<Note> getNotes() => state;
 
+  Note? getNoteById(String id) {
+    try {
+      return state.firstWhere((note) => note.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Note createNote(String title, String content,
       {Color? color,
       List<NoteImage>? images,
@@ -56,14 +74,14 @@ class NotesNotifier extends Notifier<List<Note>> {
       id: _uuid.v4(),
       title: title,
       content: content,
-      color: color,
+      color: color ?? Colors.transparent,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
       images: images ?? [],
       reminder: reminder,
       labels: labels,
     );
-    state = [...state, newNote];
+    state = [newNote, ...state];
     return newNote;
   }
 
@@ -78,8 +96,13 @@ class NotesNotifier extends Notifier<List<Note>> {
     state = state.where((note) => note.id != id).toList();
   }
 
-  void searchNotes(String query) {
-    state = state.where((note) => note.title.contains(query)).toList();
+  List<Note> searchNotes(String query) {
+    final results = state
+        .where((note) =>
+            note.title.toLowerCase().contains(query.toLowerCase()) ||
+            note.content.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+    return results;
   }
 }
 

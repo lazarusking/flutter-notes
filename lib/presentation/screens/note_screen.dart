@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 import 'package:notes/models/notes/note.dart';
 import 'package:notes/presentation/notes_provider.dart';
+import 'package:notes/widgets/color_picker.dart';
 
 class NoteScreen extends ConsumerStatefulWidget {
   final Note note;
@@ -20,6 +23,9 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
   late Color? _selectedColor;
   late List<NoteImage> _images;
   Reminder? _reminder;
+  late final List<String>? _labels;
+
+  final DateFormat _dateFormat = DateFormat('MMM d, yyyy', Intl.defaultLocale);
 
   @override
   void initState() {
@@ -29,6 +35,8 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     _selectedColor = widget.note.color;
     _images = widget.note.images;
     _reminder = widget.note.reminder;
+    _labels = widget.note.labels;
+    timeDilation = 1.2; // 1.0 means normal animation speed.
   }
 
   @override
@@ -38,192 +46,270 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     super.dispose();
   }
 
-  void _updateNote() {
-    final updatedNote = widget.note.copyWith(
-      title: _titleController.text,
-      content: _contentController.text,
-      color: _selectedColor,
-      images: _images,
-      reminder: _reminder,
-      updatedAt: DateTime.now(),
+  void _showColorPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _selectedColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.zero),
+      ),
+      builder: (BuildContext context) {
+        return ColorPicker(
+          selectedColor: _selectedColor!,
+          onColorSelected: (color) {
+            // setNewState(() {
+            //   _selectedColor = color;
+            // });
+            setState(() {
+              _selectedColor = color;
+            });
+          },
+        );
+      },
     );
+  }
+
+  void _showBottomDrawer(BuildContext context) {
+    showModalBottomSheet(
+      useSafeArea: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.zero),
+      ),
+      context: context,
+      backgroundColor: _selectedColor,
+      builder: (BuildContext context) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: Icon(Icons.delete),
+                title: Text('Delete'),
+                onTap: () {
+                  ref
+                      .read(notesProvider.notifier)
+                      .deleteNoteById(widget.note.id);
+                  //pop twice to leave the bottomdrawer then note screen
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop();
+                  }
+                  ScaffoldMessenger.of(context)
+                    ..removeCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text('Note deleted'),
+                        action: SnackBarAction(
+                          label: 'Undo',
+                          onPressed: () {
+                            ref.read(notesProvider.notifier).createNote(
+                                  widget.note.title,
+                                  widget.note.content,
+                                  color: widget.note.color,
+                                  images: widget.note.images,
+                                  reminder: widget.note.reminder,
+                                  labels: widget.note.labels,
+                                );
+                          },
+                        ),
+                      ),
+                    );
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.copy),
+                title: Text('Make a copy'),
+                onTap: () {
+                  // Copy note action here
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.send),
+                title: Text('Send'),
+                onTap: () {
+                  // Send note action here
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.label_outline),
+                title: Text('Labels'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.person_add),
+                title: Text('Collaborator'),
+                onTap: () {
+                  // Add collaborator action here
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _addLabel(String label) {
+    setState(() {
+      if (_labels!.contains(label)) {
+        _labels.add(label);
+      }
+    });
+  }
+
+  /// Updates an existing note or saves a new note if it doesn't exist.
+  void _saveOrUpdateNote() {
+    final updatedNote = widget.note.copyWith(
+        title: _titleController.text,
+        content: _contentController.text,
+        color: _selectedColor,
+        images: _images,
+        reminder: _reminder,
+        updatedAt: DateTime.now(),
+        labels: _labels);
 
     final notesNotifier = ref.read(notesProvider.notifier);
-    // .updateNote(updatedNote);
     if (updatedNote.title.isEmpty && updatedNote.content.isEmpty) {
       notesNotifier.deleteNoteById(updatedNote.id);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-          content: Text('Empty note discarded'),
-          margin: EdgeInsets.only(bottom: 10),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+            content: Text('Empty note discarded'),
+            margin: EdgeInsets.only(bottom: 10),
+          ),
+        );
       return;
     }
-    notesNotifier.updateNote(updatedNote);
+    if (updatedNote.id.isEmpty) {
+      notesNotifier.createNote(updatedNote.title, updatedNote.content,
+          color: updatedNote.color,
+          images: updatedNote.images,
+          reminder: updatedNote.reminder,
+          labels: updatedNote.labels);
+    } else {
+      notesNotifier.updateNote(updatedNote);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        surfaceTintColor: Colors.transparent,
-        backgroundColor: widget.note.color,
-        leading: IconButton(
-          tooltip: 'Navigate back',
-          icon: Icon(
-            Icons.arrow_back,
-            size: 20,
-          ),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-            _updateNote();
-          },
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Add reminder',
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          _saveOrUpdateNote();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          surfaceTintColor: Colors.transparent,
+          backgroundColor: _selectedColor,
+          leading: IconButton(
+            tooltip: 'Navigate back',
             icon: Icon(
-              Icons.add_alert_outlined,
+              Icons.arrow_back,
               size: 20,
             ),
             onPressed: () {
-              // Add reminder action here
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+              // _saveOrUpdateNote();
             },
           ),
-        ],
-      ),
-      body: Container(
-        // Add padding to the container
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: widget.note.color,
-        ),
-        child: Column(
-          children: [
-            TextField(
-              controller: _titleController,
-              style: TextStyle(fontSize: 20),
-              showCursor: MediaQuery.of(context).viewInsets.bottom != 0,
-              decoration: InputDecoration(
-                hintText: 'Title',
-                border: InputBorder.none,
+          actions: [
+            IconButton(
+              tooltip: 'Add reminder',
+              icon: Icon(
+                Icons.add_alert_outlined,
+                size: 20,
               ),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _contentController,
-                showCursor: MediaQuery.of(context).viewInsets.bottom != 0,
-                decoration: InputDecoration(
-                  hintText: 'Note',
-                  border: InputBorder.none,
-                ),
-                maxLines: null,
-              ),
+              onPressed: () {
+                // Add reminder action here
+              },
             ),
           ],
         ),
-      ),
-      // floatingActionButton: FloatingActionButton(
-      //   onPressed: () => debugPaintSizeEnabled = !debugPaintSizeEnabled,
-      //   child: Icon(Icons.save),
-      // ),
-      bottomNavigationBar: BottomAppBar(
-        color: widget.note.color,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.color_lens, size: 20),
+        body: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: _selectedColor,
+            ),
+            child: Hero(
+              tag: widget.note.id,
+              child: Material(
+                color: Colors.transparent,
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _titleController,
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                      showCursor: MediaQuery.of(context).viewInsets.bottom != 0,
+                      decoration: InputDecoration(
+                        hintText: 'Title',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _contentController,
+                        showCursor:
+                            MediaQuery.of(context).viewInsets.bottom != 0,
+                        decoration: InputDecoration(
+                          hintText: 'Note',
+                          border: InputBorder.none,
+                        ),
+                        maxLines: null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )),
+        floatingActionButton: kDebugMode
+            ? FloatingActionButton(
                 onPressed: () {
-                  // Color picker action here
+                  debugPaintSizeEnabled = !debugPaintSizeEnabled;
                 },
-              ),
-              Spacer(),
-              Text(
-                'Edited ${DateFormat('MMM d, yyyy').format(widget.note.updatedAt)}',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              Spacer(),
-              PopupMenuButton<String>(
-                onSelected: (String result) {
-                  switch (result) {
-                    case 'delete':
-                      // Delete note then navigate back, snackbar?
-                      ref
-                          .read(notesProvider.notifier)
-                          .deleteNoteById(widget.note.id);
-                      if (Navigator.of(context).canPop()) {
-                        Navigator.of(context).pop();
-                      }
-                      ScaffoldMessenger.of(context)
-                        ..removeCurrentSnackBar()
-                        ..showSnackBar(
-                          SnackBar(
-                              content: Text('Note deleted'),
-                              action: SnackBarAction(
-                                label: 'Undo',
-                                onPressed: () {
-                                  ref.read(notesProvider.notifier).createNote(
-                                        widget.note.title,
-                                        widget.note.content,
-                                        color: widget.note.color,
-                                        images: widget.note.images,
-                                        reminder: widget.note.reminder,
-                                        labels: widget.note.labels,
-                                      );
-                                },
-                              )),
-                        );
-                      break;
-                    case 'copy':
-                      // Copy note action here
-                      break;
-                    case 'send':
-                      // Send note action here
-                      break;
-                    case 'collaborator':
-                      // Add collaborator action here
-                      break;
-                  }
-                },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  const PopupMenuItem<String>(
-                    value: 'delete',
-                    child: ListTile(
-                      leading: Icon(Icons.delete),
-                      title: Text('Delete'),
-                    ),
+                child: Icon(Icons.bug_report),
+              )
+            : null,
+        bottomNavigationBar: Padding(
+          padding: MediaQuery.of(context).viewInsets,
+          child: BottomAppBar(
+            color: _selectedColor,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 1, vertical: 5),
+              margin: const EdgeInsets.only(top: 10),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.color_lens),
+                    onPressed: () => _showColorPicker(),
                   ),
-                  const PopupMenuItem<String>(
-                    value: 'copy',
-                    child: ListTile(
-                      leading: Icon(Icons.copy),
-                      title: Text('Make a copy'),
-                    ),
+                  Spacer(),
+                  Text(
+                    'Edited ${_dateFormat.format(widget.note.updatedAt)}',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
                   ),
-                  const PopupMenuItem<String>(
-                    value: 'send',
-                    child: ListTile(
-                      leading: Icon(Icons.send),
-                      title: Text('Send'),
-                    ),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'collaborator',
-                    child: ListTile(
-                      leading: Icon(Icons.person_add),
-                      title: Text('Collaborator'),
-                    ),
+                  Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.more_vert),
+                    onPressed: () {
+                      _showBottomDrawer(context);
+                    },
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
