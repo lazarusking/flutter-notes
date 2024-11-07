@@ -1,172 +1,27 @@
 // import 'package:flutter/material.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes/homepage.dart';
-
-class Note {
-  final String id;
-  final String title;
-  final String content;
-  final String color;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final List<Todo> todos;
-
-  Note({
-    required this.id,
-    required this.title,
-    required this.content,
-    required this.color,
-    required this.createdAt,
-    required this.updatedAt,
-    required this.todos,
-  });
-}
-
-class Todo {
-  final String id;
-  final String task;
-  final bool completed;
-
-  Todo({
-    required this.id,
-    required this.task,
-    required this.completed,
-  });
-}
-
-class NoteWidget extends StatelessWidget {
-  final Note note;
-
-  const NoteWidget({super.key, required this.note});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(note.title),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              note.content,
-              style: TextStyle(fontSize: 16),
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Todos:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            ...note.todos.map((todo) => ListTile(
-                  leading: Checkbox(
-                    value: todo.completed,
-                    onChanged: (bool? value) {},
-                  ),
-                  title: Text(todo.task),
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-}
+import 'package:notes/presentation/notes_provider.dart';
 
 void main() {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: defaultColor, systemNavigationBarColor: defaultColor));
+
   runApp(ProviderScope(
       child: MaterialApp(
     home: const HomePage(),
     theme: ThemeData.dark().copyWith(
-      scaffoldBackgroundColor: const Color(0xFF202124),
-      primaryColor: const Color(0xFF202124),
+      scaffoldBackgroundColor: defaultColor,
+      primaryColor: defaultColor,
     ),
   )));
 }
 
-class SearchApp extends StatelessWidget {
-  const SearchApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200.0,
-            pinned: true,
-            flexibleSpace: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                // Calculate the opacity based on scroll position
-                double top = constraints.biggest.height;
-                double opacity =
-                    (top - kToolbarHeight) / (200 - kToolbarHeight);
-
-                return FlexibleSpaceBar(
-                  centerTitle: true,
-                  title: Opacity(
-                    opacity: opacity.clamp(
-                        0.0, 1.0), // Clamp to ensure opacity stays within [0,1]
-                    child: Text(
-                      "Let's find cruelty free brands",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Color(0xFFFACCCC),
-                          Color(0xFFF2F2F7),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.pets,
-                            size: 80,
-                            color: Colors.white,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            "Start brand search",
-                            style: TextStyle(color: Colors.white, fontSize: 20),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                return ListTile(
-                  title: Text("Item #$index"),
-                );
-              },
-              childCount: 50,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // void main() {
 //   runApp(MaterialApp(
