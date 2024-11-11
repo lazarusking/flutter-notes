@@ -1,3 +1,4 @@
+import 'package:figma_squircle/figma_squircle.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -86,34 +87,40 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
                 leading: Icon(Icons.delete),
                 title: Text('Delete'),
                 onTap: () {
+                  if (!mounted) return;
+
+                  final copiedNote = widget.note.copyWith();
                   ref
                       .read(notesProvider.notifier)
                       .deleteNoteById(widget.note.id);
                   //pop twice to leave the bottomdrawer then note screen
                   if (Navigator.of(context).canPop()) {
                     Navigator.of(context).pop();
-                    Navigator.of(context).pop();
+                    Navigator.of(context).pop(copiedNote);
                   }
-                  ScaffoldMessenger.of(context)
-                    ..removeCurrentSnackBar()
-                    ..showSnackBar(
-                      SnackBar(
-                        content: Text('Note deleted'),
-                        action: SnackBarAction(
-                          label: 'Undo',
-                          onPressed: () {
-                            ref.read(notesProvider.notifier).createNote(
-                                  widget.note.title,
-                                  widget.note.content,
-                                  color: widget.note.color,
-                                  images: widget.note.images,
-                                  reminder: widget.note.reminder,
-                                  labels: widget.note.labels,
-                                );
-                          },
-                        ),
-                      ),
-                    );
+                  //ref gets disposed so it doesn't work
+                  // ScaffoldMessenger.of(context)
+                  //   ..removeCurrentSnackBar()
+                  //   ..showSnackBar(
+                  //     SnackBar(
+                  //       content: Text('Note deleted'),
+                  //       action: SnackBarAction(
+                  //         label: 'Undo',
+                  //         onPressed: () {
+                  //           if (!mounted) return;
+
+                  //           ref.read(notesProvider.notifier).createNote(
+                  //                 copiedNote.title,
+                  //                 copiedNote.content,
+                  //                 color: copiedNote.color,
+                  //                 images: copiedNote.images,
+                  //                 reminder: copiedNote.reminder,
+                  //                 labels: copiedNote.labels,
+                  //               );
+                  //         },
+                  //       ),
+                  //     ),
+                  //   );
                 },
               ),
               ListTile(
@@ -231,9 +238,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
                 Icons.add_alert_outlined,
                 size: 20,
               ),
-              onPressed: () {
-                // Add reminder action here
-              },
+              onPressed: () {},
             ),
           ],
         ),
@@ -245,7 +250,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
             child: Hero(
               tag: widget.note.id,
               child: Material(
-                color: Colors.transparent,
+                type: MaterialType.transparency,
                 child: Column(
                   children: [
                     TextField(
@@ -257,6 +262,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
                         hintText: 'Title',
                         border: InputBorder.none,
                       ),
+                      maxLines: null,
                     ),
                     Expanded(
                       child: TextField(
@@ -270,6 +276,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
                         maxLines: null,
                       ),
                     ),
+                    if (_labels!.isNotEmpty) NoteLabels(labels: _labels),
                   ],
                 ),
               ),
@@ -286,19 +293,26 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
           padding: MediaQuery.of(context).viewInsets,
           child: BottomAppBar(
             color: _selectedColor,
+            // height: kBottomNavigationBarHeight +
+            //     MediaQuery.of(context).viewInsets.bottom,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 1, vertical: 5),
-              margin: const EdgeInsets.only(top: 10),
+              padding: EdgeInsets.symmetric(horizontal: 1, vertical: 0),
+              margin: const EdgeInsets.all(0),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
                     icon: Icon(Icons.color_lens),
                     onPressed: () => _showColorPicker(),
                   ),
                   Spacer(),
-                  Text(
-                    'Edited ${_dateFormat.format(widget.note.updatedAt)}',
-                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                  Align(
+                    alignment: Alignment.topCenter,
+                    heightFactor: 1.8,
+                    child: Text(
+                      'Edited ${_dateFormat.format(widget.note.updatedAt)}',
+                      style: TextStyle(fontSize: 12, color: Colors.white70),
+                    ),
                   ),
                   Spacer(),
                   IconButton(
@@ -312,6 +326,62 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+//a widget that displays the labels of a note
+class NoteLabels extends StatelessWidget {
+  final List<String> labels;
+
+  const NoteLabels({super.key, required this.labels});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.bottomLeft,
+      padding: EdgeInsets.all(2),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final label in labels)
+            InkWell(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  // color: Colors.grey[400],
+                  borderRadius: SmoothBorderRadius(cornerRadius: 8),
+                ),
+                // decoration: ShapeDecoration(
+                //     color: const Color.fromARGB(255, 115, 115, 114),
+                //     shape: SmoothRectangleBorder(
+                //         side: BorderSide(color: Colors.grey.shade400),
+                //         borderRadius: SmoothBorderRadius(cornerRadius: 10))),
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                    ),
+                    // SizedBox(width: 4),
+                    // GestureDetector(
+                    //   onTap: () {
+                    //     // Remove label action here
+                    //   },
+                    //   child: Icon(
+                    //     Icons.close,
+                    //     size: 16,
+                    //     color: Colors.grey.shade200,
+                    //   ),
+                    // ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
