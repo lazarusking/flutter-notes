@@ -6,6 +6,7 @@ class DBHelper {
   static final DBHelper _instance = DBHelper._internal();
   factory DBHelper() => _instance;
   static Database? _database;
+  static const int _version = 1;
   static const String tablename = 'notes';
 
   DBHelper._internal();
@@ -20,7 +21,7 @@ class DBHelper {
     String path = join(await getDatabasesPath(), 'notes.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: _version,
       onCreate: _onCreate,
     );
   }
@@ -64,7 +65,7 @@ class DBHelper {
     );
   }
 
-  Future<int> delete(int id) async {
+  Future<int> delete(String id) async {
     Database db = await database;
     return await db.delete(
       tablename,
