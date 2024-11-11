@@ -1,20 +1,41 @@
-// import 'package:flutter/material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes/homepage.dart';
+import 'package:notes/models/notes/note.dart';
 import 'package:notes/presentation/notes_provider.dart';
+import 'package:notes/presentation/screens/note_screen.dart';
+import 'package:uuid/uuid.dart';
 
 void main() {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: defaultColor, systemNavigationBarColor: defaultColor));
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent));
 
   runApp(ProviderScope(
       child: MaterialApp(
     home: const HomePage(),
+    // home: NoteScreen(
+    //     note: Note(
+    //   id: Uuid().v4(),
+    //   title: "Smple Note",
+    //   content:
+    //       'This is a very long note content that is meant to test the application\'s ability to handle large amounts of text. It includes multiple sentences and goes on for quite a while to ensure that everything is displayed correctly and no data is lost in the process.',
+    //   color: Colors.transparent,
+    //   createdAt: DateTime.now(),
+    //   updatedAt: DateTime.now(),
+    //   images: [],
+    //   reminder: null,
+    //   labels: [
+    //     'Meeting Notes',
+    //     'Grocery List',
+    //     'Project Ideas',
+    //     'Daily Journal',
+    //   ],
+    // )),
     theme: ThemeData.dark().copyWith(
       scaffoldBackgroundColor: defaultColor,
       primaryColor: defaultColor,

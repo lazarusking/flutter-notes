@@ -59,7 +59,7 @@ class _ColorPickerState extends State<ColorPicker> {
                             color: colorValue,
                             colorName: colorName,
                           );
-                        }).toList(),
+                        }),
                       ],
                     )
                   : SingleChildScrollView(
