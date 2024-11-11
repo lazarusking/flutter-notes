@@ -165,11 +165,14 @@ class _HomePageState extends ConsumerState<HomePage> {
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          backgroundColor: Colors.black.withOpacity(0.8),
+          backgroundColor: ref
+              .read(notesProvider.notifier)
+              .getNoteById(selectedGrids.first)
+              ?.color,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(10))),
           child: Container(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.all(2),
             constraints: BoxConstraints(maxHeight: 400, maxWidth: 300),
             child: ColorPicker(
               isBlockStyle: true,
@@ -202,51 +205,61 @@ class _HomePageState extends ConsumerState<HomePage> {
     final filteredNotes =
         ref.read(notesProvider.notifier).searchNotes(searchQuery);
 
-    return Scaffold(
-        // backgroundColor: Colors.deepPurple,
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.only(bottom: 30.0, right: 0),
-          child: FloatingActionButton(
-              backgroundColor: Colors.black,
-              shape: const CircleBorder(),
-              onPressed: () {
-                if (kDebugMode) {
-                  debugPaintSizeEnabled = !debugPaintSizeEnabled;
-                }
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => NoteScreen(note: Note.empty()),
-                    ));
-              },
-              child: const Icon(Icons.add, color: Colors.white)),
-        ),
-        body: SafeArea(
-            // minimum: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
-            child: CustomScrollView(slivers: [
-          // SliverPersistentHeader(
-          //   delegate: SliverSearchAppBar(),
-          //   // pinned: true,
-          // ),
-          notesSliverAppBar(context),
-          SliverPadding(
-            padding: const EdgeInsets.all(10),
-            sliver: notes.isEmpty
-                ? SliverFillRemaining(
-                    child: Center(
-                      child: Text(
-                        'No notes available',
-                        style: GoogleFonts.comfortaa(fontSize: 18),
-                      ),
-                    ),
-                  )
-                : NoteSliverMasonryGrid(
-                    notes: filteredNotes,
-                    selectedGrids: selectedGrids,
-                    onSelect: onSelect,
-                  ),
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop && _isSearchBarVisible) {
+          _toggleSearchBar();
+          setState(() {
+            selectedGrids.clear();
+          });
+        }
+      },
+      child: Scaffold(
+          // backgroundColor: Colors.deepPurple,
+          floatingActionButton: Padding(
+            padding: const EdgeInsets.only(bottom: 30.0, right: 0),
+            child: FloatingActionButton(
+                backgroundColor: Colors.black,
+                shape: const CircleBorder(),
+                onPressed: () {
+                  if (kDebugMode) {
+                    debugPaintSizeEnabled = !debugPaintSizeEnabled;
+                  }
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => NoteScreen(note: Note.empty()),
+                      ));
+                },
+                child: const Icon(Icons.add, color: Colors.white)),
           ),
-        ])));
+          body: SafeArea(
+              // minimum: const EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+              child: CustomScrollView(slivers: [
+            // SliverPersistentHeader(
+            //   delegate: SliverSearchAppBar(),
+            //   // pinned: true,
+            // ),
+            notesSliverAppBar(context),
+            SliverPadding(
+              padding: const EdgeInsets.all(10),
+              sliver: notes.isEmpty
+                  ? SliverFillRemaining(
+                      child: Center(
+                        child: Text(
+                          'No notes available',
+                          style: GoogleFonts.comfortaa(fontSize: 18),
+                        ),
+                      ),
+                    )
+                  : NoteSliverMasonryGrid(
+                      notes: filteredNotes,
+                      selectedGrids: selectedGrids,
+                      onSelect: onSelect,
+                    ),
+            ),
+          ]))),
+    );
   }
 
   SliverPadding notesSliverAppBar(BuildContext context) {
@@ -374,7 +387,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 }
 
-class NoteSliverMasonryGrid extends StatelessWidget {
+class NoteSliverMasonryGrid extends ConsumerStatefulWidget {
   final List<Note> notes;
   final List<String> selectedGrids;
   final Function(String) onSelect;
@@ -386,99 +399,133 @@ class NoteSliverMasonryGrid extends StatelessWidget {
       required this.onSelect});
 
   @override
+  ConsumerState<NoteSliverMasonryGrid> createState() =>
+      _NoteSliverMasonryGridState();
+}
+
+class _NoteSliverMasonryGridState extends ConsumerState<NoteSliverMasonryGrid> {
+  @override
   Widget build(BuildContext context) {
     return SliverMasonryGrid(
       gridDelegate: const SliverSimpleGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
       ),
       // crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 14,
+      mainAxisSpacing: 9,
+      crossAxisSpacing: 10,
       // childCount: 20,
       delegate: SliverChildBuilderDelegate(
-        childCount: notes.length,
+        childCount: widget.notes.length,
         (BuildContext context, int index) {
-          final note = notes[index];
-          final id = notes[index].id;
-          final isSelected = selectedGrids.contains(id);
+          final note = widget.notes[index];
+          final id = widget.notes[index].id;
+          final isSelected = widget.selectedGrids.contains(id);
 
-          return InkWell(
-            enableFeedback: true,
-            splashColor: note.color,
-            highlightColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-            onTap: () {
-              if (selectedGrids.isNotEmpty) {
-                onSelect(id);
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => NoteScreen(note: note),
-                  ),
-                );
-              }
-            },
-            onLongPress: () {
-              print("Long pressed");
-              print(selectedGrids);
-              onSelect(id);
-            },
-            child: Ink(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-              decoration: ShapeDecoration(
-                  // color: _getNoteColor(index),
-                  // color: Color(0xff77172e),
-                  // color: notes[index].color ?? Color(0xFF5f6368),
-                  color: note.color,
-                  shape: SmoothRectangleBorder(
-                      side: BorderSide(
-                        color: isSelected
-                            ? Color(0xFFD2D4D7)
-                            : note.color == defaultColor
-                                ? Color(0xFF5f6368)
-                                : note.color!,
-                        width: 2,
+          return Hero(
+            tag: note.id,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                enableFeedback: true,
+                splashColor: note.color,
+                highlightColor: Colors.transparent,
+                focusColor: Colors.transparent,
+                borderRadius: BorderRadius.all(Radius.circular(9)),
+                onTap: () async {
+                  if (widget.selectedGrids.isNotEmpty) {
+                    widget.onSelect(id);
+                  } else {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => NoteScreen(note: note),
                       ),
-                      borderAlign: BorderAlign.inside,
-                      borderRadius: SmoothBorderRadius(
-                          cornerRadius: 10, cornerSmoothing: 0))),
-              child: Transform.scale(
-                scale: isSelected ? 1.009 : 1.0,
-                child: Padding(
+                    );
+                    int originalPosition = index; // Store the original position
+
+                    if (result is Note) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context)
+                        ..removeCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(
+                            content: Text('Note deleted'),
+                            action: SnackBarAction(
+                              label: 'Undo',
+                              onPressed: () {
+                                ref.read(notesProvider.notifier).createNote(
+                                      result.title,
+                                      result.content,
+                                      color: result.color,
+                                      images: result.images,
+                                      reminder: result.reminder,
+                                      labels: result.labels,
+                                      position:
+                                          originalPosition, // Pass the original position
+                                    );
+                              },
+                            ),
+                          ),
+                        );
+                    }
+                  }
+                },
+                onLongPress: () {
+                  print("Long pressed");
+                  print(widget.selectedGrids);
+                  widget.onSelect(id);
+                },
+                child: Ink(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 15),
-                  child: GridTile(
-                      child: Hero(
-                    tag: note.id,
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              note.title,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                                // color: Color(0xFFe8eaed)
+                      const EdgeInsets.symmetric(horizontal: 1, vertical: 5),
+                  decoration: ShapeDecoration(
+                      // color: _getNoteColor(index),
+                      // color: Color(0xff77172e),
+                      // color: notes[index].color ?? Color(0xFF5f6368),
+                      color: note.color,
+                      shape: SmoothRectangleBorder(
+                          side: BorderSide(
+                            color: isSelected
+                                ? Color(0xFFD2D4D7)
+                                : note.color == defaultColor
+                                    ? Color(0xFF5f6368)
+                                    : note.color ?? defaultColor,
+                            width: 2,
+                          ),
+                          borderRadius: SmoothBorderRadius(
+                              cornerRadius: 10, cornerSmoothing: 0))),
+                  child: Transform.scale(
+                    scale: isSelected ? 1.009 : 1.0,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 12),
+                      child: GridTile(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                note.title,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                  // color: Color(0xFFe8eaed)
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              note.content,
-                              style: TextStyle(
-                                  fontSize: 16, color: Color(0xFFe8eaed)),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 12,
-                            ),
-                          ],
+                              const SizedBox(height: 16),
+                              Text(
+                                note.content,
+                                style: TextStyle(
+                                    fontSize: 15, color: Color(0xFFe8eaed)),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 12,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  )),
+                  ),
                 ),
               ),
             ),
