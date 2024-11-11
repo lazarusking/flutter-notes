@@ -40,6 +40,59 @@ Color _getNoteColor(int index) {
 }
 
 final _uuid = Uuid();
+// final labelProvider = FutureProvider((ref) async {
+//   return ref.read(labelsProvider.notifier);
+// });
+final labelsProvider =
+    NotifierProvider<LabelsNotifier, List<Label>>(LabelsNotifier.new);
+
+class LabelsNotifier extends Notifier<List<Label>> {
+  @override
+  List<Label> build() {
+    return [];
+  }
+
+  /// Adds a new label with the given [name].
+  ///
+  /// If a label with the specified name does not exist, it creates a new label.
+  /// If a label with the specified name already exists, it returns the existing label.
+  ///
+  /// Returns the created or existing [Label].
+  Label addLabel(String name) {
+    // Check if label already exists by name
+    final existingLabel = state.firstWhere(
+      (label) => label.name == name,
+      orElse: () => Label(id: null, name: ""),
+    );
+
+    if (existingLabel.id == null) {
+      // Create a new label if it doesn't exist
+      final newLabel = Label(id: state.length + 1, name: name);
+      state = [...state, newLabel];
+      return newLabel;
+    }
+    return existingLabel;
+  }
+
+  void updateLabel(Label updatedLabel) {
+    state = [
+      for (final label in state)
+        if (label.id == updatedLabel.id) updatedLabel else label
+    ];
+  }
+
+  void deleteLabelById(int id) {
+    state = state.where((label) => label.id != id).toList();
+  }
+
+  Label? getLabelById(int id) {
+    try {
+      return state.firstWhere((label) => label.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+}
 
 final notesProvider =
     NotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
@@ -69,7 +122,14 @@ class NotesNotifier extends Notifier<List<Note>> {
       {Color? color,
       List<NoteImage>? images,
       Reminder? reminder,
-      List<String>? labels}) {
+      List<String>? labels,
+      int? position}) {
+    final labelIds = labels
+            ?.map(
+                (name) => ref.read(labelsProvider.notifier).addLabel(name).name)
+            .toList() ??
+        [];
+
     final newNote = Note(
       id: _uuid.v4(),
       title: title,
@@ -79,9 +139,19 @@ class NotesNotifier extends Notifier<List<Note>> {
       updatedAt: DateTime.now(),
       images: images ?? [],
       reminder: reminder,
-      labels: labels,
+      labels: labelIds,
     );
-    state = [newNote, ...state];
+    if (position != null) {
+      final newState = List<Note>.from(state);
+      newState.insert(
+          position, newNote); // Insert the note at the original position
+      state = newState;
+    } else {
+      state = [
+        newNote,
+        ...state
+      ]; // Add the note at the end if no position is specified
+    }
     return newNote;
   }
 
@@ -104,70 +174,91 @@ class NotesNotifier extends Notifier<List<Note>> {
         .toList();
     return results;
   }
-}
 
-List<Note> generateRandomNotes(int count) {
-  final random = Random();
-  final notes = <Note>[];
-  final titles = [
-    'Meeting Notes',
-    'Grocery List',
-    'Project Ideas',
-    'Daily Journal',
-    'Workout Plan',
-    'Recipe',
-    'Travel Itinerary',
-    'Book Summary',
-    'To-Do List',
-    'Brainstorming Session'
-  ];
-
-  final contents = [
-    'Discuss project milestones and deadlines.',
-    'Buy milk, eggs, bread, and cheese.',
-    'Idea for a new mobile app to track fitness goals.',
-    'Today was a productive day. I managed to complete all my tasks.',
-    'Morning run, afternoon gym session, and evening yoga.',
-    'Ingredients: 2 cups of flour, 1 cup of sugar, 1/2 cup of butter.',
-    'Flight at 10 AM, hotel check-in at 2 PM, dinner reservation at 7 PM.',
-    'Summary of "The Great Gatsby": A story about the mysterious Jay Gatsby.',
-    '1. Finish the report. 2. Call the client. 3. Schedule a meeting.',
-    'Brainstorming ideas for the new marketing campaign.',
-    'This is a very long note content that is meant to test the application\'s ability to handle large amounts of text. It includes multiple sentences and goes on for quite a while to ensure that everything is displayed correctly and no data is lost in the process.',
-    'Another example of a long note content. This one is also quite extensive and includes various details about a hypothetical scenario. The goal is to make sure that the note-taking application can manage and display long texts without any issues or performance problems.'
-  ];
-
-  for (int i = 0; i < count; i++) {
-    final title = titles[random.nextInt(titles.length)];
-
-    final content = contents[random.nextInt(contents.length)];
-    notes.add(Note(
-      id: _uuid.v4(),
-      title: title,
-      content: content,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      color: _getNoteColor(random.nextInt(colors.length)),
-      images: [],
-      reminder: null,
-      labels: [],
-    ));
+  List<Label> getLabelsForNote(Note note) {
+    return note.labels
+        .map((label) =>
+            ref.read(labelsProvider.notifier).getLabelById(int.parse(label)))
+        .whereType<Label>()
+        .toList();
   }
-  // for (int i = 0; i < count; i++) {
-  //   final isLong = random.nextBool();
-  //   final content = isLong ? 'This is a very long note. ' * 7 : 'Short note.';
-  //   notes.add(Note(
-  //     id: _uuid.v4(),
-  //     content: content,
-  //     title: 'Note $i',
-  //     createdAt: DateTime.now(),
-  //     color: _getNoteColor(random.nextInt(colors.length)),
-  //     updatedAt: DateTime.now(),
-  //   ));
-  // }
 
-  return notes;
+  void initializeLabels() {
+    final labelsNotifier = ref.read(labelsProvider.notifier);
+    for (final name in labelNames) {
+      labelsNotifier.addLabel(name);
+    }
+  }
+
+  List<Note> generateRandomNotes(int count) {
+    final random = Random();
+    final notes = <Note>[];
+    final titles = [
+      'Meeting Notes',
+      'Grocery List',
+      'Project Ideas',
+      'Daily Journal',
+      'Workout Plan',
+      'Recipe',
+      'Travel Itinerary',
+      'Book Summary',
+      'To-Do List',
+      'Brainstorming Session'
+    ];
+
+    final contents = [
+      'Discuss project milestones and deadlines.',
+      'Buy milk, eggs, bread, and cheese.',
+      'Idea for a new mobile app to track fitness goals.',
+      'Today was a productive day. I managed to complete all my tasks.',
+      'Morning run, afternoon gym session, and evening yoga.',
+      'Ingredients: 2 cups of flour, 1 cup of sugar, 1/2 cup of butter.',
+      'Flight at 10 AM, hotel check-in at 2 PM, dinner reservation at 7 PM.',
+      'Summary of "The Great Gatsby": A story about the mysterious Jay Gatsby.',
+      '1. Finish the report. 2. Call the client. 3. Schedule a meeting.',
+      'Brainstorming ideas for the new marketing campaign.',
+      'This is a very long note content that is meant to test the application\'s ability to handle large amounts of text. It includes multiple sentences and goes on for quite a while to ensure that everything is displayed correctly and no data is lost in the process.',
+      'Another example of a long note content. This one is also quite extensive and includes various details about a hypothetical scenario. The goal is to make sure that the note-taking application can manage and display long texts without any issues or performance problems.'
+    ];
+
+    for (int i = 0; i < count; i++) {
+      final title = titles[random.nextInt(titles.length)];
+      final content = contents[random.nextInt(contents.length)];
+
+      // Assign unique random labels to the note
+      final noteLabels = (labelNames.toList()..shuffle(random))
+          .take(random.nextInt(3) + 1)
+          .toList();
+
+      notes.add(Note(
+        id: _uuid.v4(),
+        title: title,
+        content: content,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        color: _getNoteColor(random.nextInt(colors.length)),
+        images: [],
+        reminder: null,
+        labels: noteLabels,
+      ));
+    }
+
+    return notes;
+  }
 }
+
+final labelNames = [
+  'work',
+  'personal',
+  'urgent',
+  'shopping',
+  'ideas',
+  'travel',
+  'fitness',
+  'reading',
+  'chores',
+  'miscellaneous'
+];
 
 // void addRandomNotes() {
 //   state = generateRandomNotes(7);

@@ -18,7 +18,7 @@ class Note {
   String content = '';
   List<NoteImage> images = [];
   Reminder? reminder;
-  List<String>? labels;
+  List<String> labels;
 
   Note({
     required this.id,
@@ -29,7 +29,7 @@ class Note {
     this.content = '',
     this.images = const [],
     this.reminder,
-    this.labels,
+    this.labels = const [],
   });
   factory Note.empty() => Note(
       id: '',
@@ -68,7 +68,7 @@ class Note {
   factory Note.fromJson(Map<String, dynamic> json) => Note(
         id: json["id"],
         title: json["title"],
-        color: json["color"],
+        color: json["color"] != null ? Color(int.parse(json["color"])) : null,
         createdAt: DateTime.parse(json["createdAt"]),
         updatedAt: DateTime.parse(json["updatedAt"]),
         content: json["content"],
@@ -81,14 +81,13 @@ class Note {
   Map<String, dynamic> toJson() => {
         "id": id,
         "title": title,
-        "color": color,
+        "color": color?.value.toString(),
         "createdAt": createdAt.toIso8601String(),
         "updatedAt": updatedAt.toIso8601String(),
         "content": content,
         "images": List<dynamic>.from(images.map((x) => x.toJson())),
         "reminder": reminder?.toJson(),
-        "labels":
-            labels != null ? List<dynamic>.from(labels!.map((x) => x)) : []
+        "labels": List<dynamic>.from(labels.map((x) => x))
       };
 }
 
@@ -156,6 +155,34 @@ class Reminder {
       };
 }
 
+class Label {
+  int? id;
+  String name;
+
+  Label({
+    required this.id,
+    required this.name,
+  });
+
+  Label copyWith({
+    int? id,
+    String? name,
+  }) =>
+      Label(
+        id: id ?? this.id,
+        name: name ?? this.name,
+      );
+
+  factory Label.fromJson(Map<String, dynamic> json) => Label(
+        id: json["id"],
+        name: json["name"],
+      );
+
+  Map<String, dynamic> toJson() => {
+        "id": id,
+        "name": name,
+      };
+}
 
 // {
 //   "id": "550e8400-e29b-41d4-a716-446655440000",
