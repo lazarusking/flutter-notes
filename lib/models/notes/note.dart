@@ -36,7 +36,7 @@ class Note {
       title: '',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
-      color: Color(0xFF202124));
+      color: const Color(0xFF202124));
   Note copyWith({
     String? id,
     String? title,
@@ -92,37 +92,37 @@ class Note {
 }
 
 class NoteImage {
-  String type;
-  String? url;
-  String? path;
+  String id;
+  String noteId;
+  List<int> imageData;
 
   NoteImage({
-    required this.type,
-    this.url,
-    this.path,
+    required this.id,
+    required this.noteId,
+    required this.imageData,
   });
 
   NoteImage copyWith({
-    String? type,
-    String? url,
-    String? path,
+    String? id,
+    String? noteId,
+    List<int>? imageData,
   }) =>
       NoteImage(
-        type: type ?? this.type,
-        url: url ?? this.url,
-        path: path ?? this.path,
+        id: id ?? this.id,
+        noteId: noteId ?? this.noteId,
+        imageData: imageData ?? this.imageData,
       );
 
   factory NoteImage.fromJson(Map<String, dynamic> json) => NoteImage(
-        type: json["type"],
-        url: json["url"],
-        path: json["path"],
+        id: json["id"],
+        noteId: json["note_id"],
+        imageData: List<int>.from(json["image_data"]),
       );
 
   Map<String, dynamic> toJson() => {
-        "type": type,
-        "url": url,
-        "path": path,
+        "id": id,
+        "note_id": noteId,
+        "image_data": imageData,
       };
 }
 
