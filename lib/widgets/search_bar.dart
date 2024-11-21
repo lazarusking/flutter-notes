@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:notes/presentation/notes_provider.dart';
+import 'package:notes/providers/notes_provider.dart';
 
 class CustomSearchBar extends ConsumerStatefulWidget {
   final VoidCallback onCancel;

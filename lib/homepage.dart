@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:notes/models/notes/note.dart';
-import 'package:notes/presentation/notes_provider.dart';
+import 'package:notes/providers/notes_provider.dart';
 import 'package:notes/presentation/screens/note_screen.dart';
 import 'package:notes/widgets/color_picker.dart';
 import 'package:notes/widgets/search_bar.dart';
@@ -164,31 +164,36 @@ class _HomePageState extends ConsumerState<HomePage> {
     showAdaptiveDialog(
       context: context,
       builder: (BuildContext context) {
+        final firstNote =
+            ref.read(notesProvider.notifier).getNoteById(selectedGrids.first);
         return Dialog(
-          backgroundColor: ref
-              .read(notesProvider.notifier)
-              .getNoteById(selectedGrids.first)
-              ?.color,
-          shape: RoundedRectangleBorder(
+          backgroundColor: switch (firstNote) {
+            AsyncData(:Note value) => value.color,
+            AsyncError() => null,
+            _ => Colors.transparent,
+          },
+          shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(10))),
           child: Container(
-            padding: EdgeInsets.all(2),
-            constraints: BoxConstraints(maxHeight: 400, maxWidth: 300),
+            padding: const EdgeInsets.all(2),
+            constraints: const BoxConstraints(maxHeight: 400, maxWidth: 300),
             child: ColorPicker(
               isBlockStyle: true,
               selectedColor: Colors.transparent,
               onColorSelected: (color) {
-                setState(() {
+                setState(() async {
                   for (final id in selectedGrids) {
                     final note =
-                        ref.read(notesProvider.notifier).getNoteById(id);
+                        await ref.read(notesProvider.notifier).getNoteById(id);
                     if (note != null) {
                       final updatedNote = note.copyWith(color: color);
                       ref.read(notesProvider.notifier).updateNote(updatedNote);
                     }
                   }
                   selectedGrids.clear();
-                  Navigator.of(context).pop();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
                 });
               },
             ),
@@ -410,15 +415,13 @@ class _NoteSliverMasonryGridState extends ConsumerState<NoteSliverMasonryGrid> {
       gridDelegate: const SliverSimpleGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
       ),
-      // crossAxisCount: 2,
       mainAxisSpacing: 9,
       crossAxisSpacing: 10,
-      // childCount: 20,
       delegate: SliverChildBuilderDelegate(
         childCount: widget.notes.length,
         (BuildContext context, int index) {
           final note = widget.notes[index];
-          final id = widget.notes[index].id;
+          final id = note.id;
           final isSelected = widget.selectedGrids.contains(id);
 
           return Hero(
@@ -430,7 +433,7 @@ class _NoteSliverMasonryGridState extends ConsumerState<NoteSliverMasonryGrid> {
                 splashColor: note.color,
                 highlightColor: Colors.transparent,
                 focusColor: Colors.transparent,
-                borderRadius: BorderRadius.all(Radius.circular(9)),
+                borderRadius: const BorderRadius.all(Radius.circular(9)),
                 onTap: () async {
                   if (widget.selectedGrids.isNotEmpty) {
                     widget.onSelect(id);
@@ -449,20 +452,13 @@ class _NoteSliverMasonryGridState extends ConsumerState<NoteSliverMasonryGrid> {
                         ..removeCurrentSnackBar()
                         ..showSnackBar(
                           SnackBar(
-                            content: Text('Note deleted'),
+                            content: const Text('Note deleted'),
                             action: SnackBarAction(
                               label: 'Undo',
                               onPressed: () {
                                 ref.read(notesProvider.notifier).createNote(
-                                      result.title,
-                                      result.content,
-                                      color: result.color,
-                                      images: result.images,
-                                      reminder: result.reminder,
-                                      labels: result.labels,
-                                      position:
-                                          originalPosition, // Pass the original position
-                                    );
+                                    result,
+                                    position: originalPosition);
                               },
                             ),
                           ),
@@ -479,16 +475,13 @@ class _NoteSliverMasonryGridState extends ConsumerState<NoteSliverMasonryGrid> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 1, vertical: 5),
                   decoration: ShapeDecoration(
-                      // color: _getNoteColor(index),
-                      // color: Color(0xff77172e),
-                      // color: notes[index].color ?? Color(0xFF5f6368),
                       color: note.color,
                       shape: SmoothRectangleBorder(
                           side: BorderSide(
                             color: isSelected
-                                ? Color(0xFFD2D4D7)
+                                ? const Color(0xFFD2D4D7)
                                 : note.color == defaultColor
-                                    ? Color(0xFF5f6368)
+                                    ? const Color(0xFF5f6368)
                                     : note.color ?? defaultColor,
                             width: 2,
                           ),
@@ -509,13 +502,12 @@ class _NoteSliverMasonryGridState extends ConsumerState<NoteSliverMasonryGrid> {
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w500,
-                                  // color: Color(0xFFe8eaed)
                                 ),
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 note.content,
-                                style: TextStyle(
+                                style: const TextStyle(
                                     fontSize: 15, color: Color(0xFFe8eaed)),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 12,
