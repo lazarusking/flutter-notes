@@ -1,10 +1,10 @@
 import 'package:notes/models/notes/note.dart';
 
 abstract class NoteRepository {
-  List<Note> getNotes();
-  Note? getNoteById(String id);
-  Note createNote(Note note);
-  void updateNote(Note note);
-  void deleteNoteById(String id);
-  List<Note> searchNotes(String query);
+  Future<List<Note>> getNotes();
+  Future<Note?> getNoteById(String id);
+  Future<Note> createNote(Note note, {int? position});
+  Future<void> updateNote(Note note);
+  Future<void> deleteNoteById(String id);
+  Future<List<Note>> searchNotes(String query);
 }

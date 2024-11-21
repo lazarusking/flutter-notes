@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes/models/notes/note.dart';
+import 'package:notes/models/notes/note_repository.dart';
+import 'package:notes/repositories/in_memory_note_repository.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:math';
 
@@ -17,12 +19,12 @@ const colors = {
   'clay': Color(0xFF4B443A),
   'chalk': Color(0xFF232427)
 };
-final defaultColor = Color(0xFF202124);
+const defaultColor = Color(0xFF202124);
 
 String getColorName(Color color) {
   return colors.entries
       .firstWhere((entry) => entry.value == color,
-          orElse: () => MapEntry('unknown', Colors.transparent))
+          orElse: () => const MapEntry('unknown', Colors.transparent))
       .key;
 }
 
@@ -39,7 +41,7 @@ Color _getNoteColor(int index) {
   return colors.values.elementAt(index % colors.length);
 }
 
-final _uuid = Uuid();
+const _uuid = Uuid();
 // final labelProvider = FutureProvider((ref) async {
 //   return ref.read(labelsProvider.notifier);
 // });
@@ -97,73 +99,72 @@ class LabelsNotifier extends Notifier<List<Label>> {
 final notesProvider =
     NotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
 final searchQueryProvider = StateProvider<String>((ref) => '');
+final notesRepositoryProvider = Provider<NoteRepository>((ref) {
+  return InMemoryNoteRepository();
+});
 
 class NotesNotifier extends Notifier<List<Note>> {
-  // final NoteRepository repository;
+  late final NoteRepository _repository;
 
-  // NoteRepository(this.repository);
+  Future<void> _initializeNotes() async {
+    state = await _repository.getNotes();
+  }
+
   @override
   List<Note> build() {
-    // return [];
-    return generateRandomNotes(10);
+    _repository = ref.read(notesRepositoryProvider);
+    // return generateRandomNotes(10);
+    _initializeNotes();
+    return [];
   }
 
-  List<Note> getNotes() => state;
+  // NoteRepository(this.repository);
 
-  Note? getNoteById(String id) {
-    try {
-      return state.firstWhere((note) => note.id == id);
-    } catch (e) {
-      return null;
-    }
+  Future<List<Note>> getNotes() async {
+    state = await _repository.getNotes();
+    return state;
   }
 
-  Note createNote(String title, String content,
-      {Color? color,
-      List<NoteImage>? images,
-      Reminder? reminder,
-      List<String>? labels,
-      int? position}) {
-    final labelIds = labels
-            ?.map(
-                (name) => ref.read(labelsProvider.notifier).addLabel(name).name)
-            .toList() ??
-        [];
+  Future<Note?> getNoteById(String id) async {
+    // try {
+    //   return state.firstWhere((note) => note.id == id);
+    // } catch (e) {
+    //   return null;
+    // }
+    return await _repository.getNoteById(id);
+  }
 
-    final newNote = Note(
-      id: _uuid.v4(),
-      title: title,
-      content: content,
-      color: color ?? Colors.transparent,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      images: images ?? [],
-      reminder: reminder,
-      labels: labelIds,
-    );
+  Future<Note> createNote(Note note, {int? position}) async {
+    final labelIds = note.labels
+        .map((name) => ref.read(labelsProvider.notifier).addLabel(name).name)
+        .toList();
+    final updatedNote = note.copyWith(labels: labelIds);
+    final newNote =
+        await _repository.createNote(updatedNote, position: position);
+
     if (position != null) {
       final newState = List<Note>.from(state);
-      newState.insert(
-          position, newNote); // Insert the note at the original position
+      newState.insert(position, newNote);
       state = newState;
     } else {
-      state = [
-        newNote,
-        ...state
-      ]; // Add the note at the end if no position is specified
+      state = [newNote, ...state];
     }
+    // await _initializeNotes();
     return newNote;
   }
 
-  void updateNote(Note updatedNote) {
+  Future<void> updateNote(Note updatedNote) async {
     state = [
       for (final note in state)
         if (note.id == updatedNote.id) updatedNote else note
     ];
+    await _repository.updateNote(updatedNote);
+    // await _initializeNotes();
   }
 
-  void deleteNoteById(String id) {
+  Future<void> deleteNoteById(String id) async {
     state = state.where((note) => note.id != id).toList();
+    await _repository.deleteNoteById(id);
   }
 
   List<Note> searchNotes(String query) {
@@ -173,6 +174,7 @@ class NotesNotifier extends Notifier<List<Note>> {
             note.content.toLowerCase().contains(query.toLowerCase()))
         .toList();
     return results;
+    // return await _repository.searchNotes(query);
   }
 
   List<Label> getLabelsForNote(Note note) {

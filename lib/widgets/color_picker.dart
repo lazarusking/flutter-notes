@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:notes/presentation/notes_provider.dart';
+import 'package:notes/providers/notes_provider.dart';
 
 class ColorPicker extends StatefulWidget {
   final Color selectedColor;
@@ -23,7 +23,7 @@ class _ColorPickerState extends State<ColorPicker> {
   void initState() {
     super.initState();
     _selectedColor = widget.selectedColor;
-    print("initial $_selectedColor");
+    // print("initial $_selectedColor");
   }
 
   @override
@@ -34,7 +34,7 @@ class _ColorPickerState extends State<ColorPicker> {
       return Material(
           color: _selectedColor,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ListTile(
+            const ListTile(
               title: Text('Pick a color'),
             ),
             Container(
@@ -49,7 +49,7 @@ class _ColorPickerState extends State<ColorPicker> {
                       childAspectRatio: 1,
                       children: [
                         _buildColorOptions(
-                          color: Color(0xFF202124),
+                          color: const Color(0xFF202124),
                           colorName: 'Default color',
                         ),
                         ...colors.entries.map((entry) {
@@ -79,7 +79,7 @@ class _ColorPickerState extends State<ColorPicker> {
                       ),
                     ),
             ),
-            SizedBox(
+            const SizedBox(
               height: 40,
             )
           ]));

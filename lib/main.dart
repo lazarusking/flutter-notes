@@ -3,15 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes/homepage.dart';
-import 'package:notes/models/notes/note.dart';
-import 'package:notes/presentation/notes_provider.dart';
-import 'package:notes/presentation/screens/note_screen.dart';
-import 'package:uuid/uuid.dart';
+import 'package:notes/providers/notes_provider.dart';
 
 void main() {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       systemNavigationBarColor: Colors.transparent));
 
