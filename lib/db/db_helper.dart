@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:notes/models/notes/note.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -105,6 +106,181 @@ class DBHelper {
     );
   }
 
+  Future<Note?> getNoteById(String id) async {
+    final db = await database;
+    final List<Map<String, dynamic>> results = await db.query(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (results.isNotEmpty) {
+      return Note.fromJson(results.first);
+    }
+    return null;
+  }
+
+  Future<List<Note>> getNotes() async {
+    final db = await database;
+    final List<Map<String, dynamic>> noteMaps = await db.query(
+      'notes',
+      orderBy: 'updatedAt DESC',
+    );
+
+    return Future.wait(noteMaps.map((noteMap) async {
+      final List<Map<String, dynamic>> labelMaps = await db.query(
+        'labels',
+        where: 'noteId = ?',
+        whereArgs: [noteMap['id']],
+      );
+
+      final List<Map<String, dynamic>> imageMaps = await db.query(
+        'images',
+        where: 'noteId = ?',
+        whereArgs: [noteMap['id']],
+      );
+
+      final reminderMap = await db.query(
+        'reminders',
+        where: 'noteId = ?',
+        whereArgs: [noteMap['id']],
+      );
+
+      return Note(
+        id: noteMap['id'],
+        title: noteMap['title'],
+        content: noteMap['content'],
+        color: Color(int.parse(noteMap['color'])),
+        createdAt: DateTime.parse(noteMap['createdAt']),
+        updatedAt: DateTime.parse(noteMap['updatedAt']),
+        labels: labelMaps.map((m) => m['label'] as String).toList(),
+        images: imageMaps
+            .map((m) => NoteImage(
+                  id: m['id'],
+                  noteId: m['noteId'],
+                  imageData: m['imageData'],
+                ))
+            .toList(),
+        reminder: reminderMap.isNotEmpty
+            ? Reminder(
+                time: DateTime.parse(reminderMap.first['time'] as String),
+                recurrence: reminderMap.first['recurrence'] as Recurrence,
+              )
+            : null,
+      );
+    }).toList());
+  }
+
+  Future<void> insertNoteWithRelations(Note note) async {
+    Database db = await database;
+    await db.transaction((txn) async {
+      // Insert the note
+      await txn.insert(
+        'notes',
+        note.toJson(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      // Insert related images
+      for (final image in note.images) {
+        await txn.insert(
+          'images',
+          {
+            'id': image.id,
+            'note_id': note.id,
+            'image_data': image.imageData,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      // Insert reminder if it exists
+      if (note.reminder != null) {
+        await txn.insert(
+          'reminders',
+          {
+            'note_id': note.id,
+            'reminder_time': note.reminder!.time.toIso8601String(),
+            'recurrence': note.reminder!.recurrence,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      // Insert labels
+      for (final label in note.labels) {
+        await txn.insert(
+          'note_labels',
+          {
+            'note_id': note.id,
+            'label_id': label,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
+
+  Future<void> updateNote(Note note) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      // Update note
+      await txn.update(
+        'notes',
+        {
+          'title': note.title,
+          'content': note.content,
+          'color': note.color!.value.toString(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [note.id],
+      );
+
+      // Delete existing relations
+      await txn
+          .delete('note_labels', where: 'note_id = ?', whereArgs: [note.id]);
+      await txn.delete('images', where: 'note_id = ?', whereArgs: [note.id]);
+      await txn.delete('reminders', where: 'note_id = ?', whereArgs: [note.id]);
+
+      // Insert new relations
+      for (final label in note.labels) {
+        await txn.insert('note_labels', {
+          'note_id': note.id,
+          'label_id': label,
+        });
+      }
+
+      for (final image in note.images) {
+        await txn.insert('images', {
+          'id': image.id,
+          'note_id': note.id,
+          'image_data': image.imageData,
+        });
+      }
+
+      if (note.reminder != null) {
+        await txn.insert('reminders', {
+          'note_id': note.id,
+          'reminder_time': note.reminder!.time.toIso8601String(),
+          'recurrence': note.reminder!.recurrence,
+        });
+      }
+    });
+  }
+
+  Future<List<Note>> searchNotes(String query) async {
+    final db = await database;
+    final List<Map<String, dynamic>> results = await db.query(
+      'notes',
+      where: 'title LIKE ? OR content LIKE ?',
+      whereArgs: ['%$query%', '%$query%'],
+      orderBy: 'updatedAt DESC',
+    );
+
+    return results.map((json) => Note.fromJson(json)).toList();
+  }
+
   Future<void> insertLabel(Label label) async {
     Database db = await database;
     await db.insert(
@@ -153,55 +329,5 @@ class DBHelper {
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-  }
-
-  Future<void> insertNoteWithRelations(Note note) async {
-    Database db = await database;
-    await db.transaction((txn) async {
-      // Insert the note
-      await txn.insert(
-        'notes',
-        note.toJson(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-
-      // Insert related images
-      for (var image in note.images) {
-        await txn.insert(
-          'images',
-          {
-            'id': image.id,
-            'note_id': note.id,
-            'image_data': image.imageData,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-
-      // Insert reminder if it exists
-      if (note.reminder != null) {
-        await txn.insert(
-          'reminders',
-          {
-            'note_id': note.id,
-            'reminder_time': note.reminder!.time.toIso8601String(),
-            'recurrence': note.reminder!.recurrence,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-
-      // Insert labels
-      for (var label in note.labels) {
-        await txn.insert(
-          'note_labels',
-          {
-            'note_id': note.id,
-            'label_id': label,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-    });
   }
 }
