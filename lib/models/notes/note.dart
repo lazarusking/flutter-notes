@@ -126,9 +126,11 @@ class NoteImage {
       };
 }
 
+enum Recurrence { daily, weekly, monthly, yearly }
+
 class Reminder {
   DateTime time;
-  String recurrence;
+  Recurrence recurrence;
 
   Reminder({
     required this.time,
@@ -137,7 +139,7 @@ class Reminder {
 
   Reminder copyWith({
     DateTime? time,
-    String? recurrence,
+    Recurrence? recurrence,
   }) =>
       Reminder(
         time: time ?? this.time,
@@ -146,12 +148,13 @@ class Reminder {
 
   factory Reminder.fromJson(Map<String, dynamic> json) => Reminder(
         time: DateTime.parse(json["time"]),
-        recurrence: json["recurrence"],
+        recurrence: Recurrence.values.firstWhere(
+            (e) => e.toString().split('.').last == json["recurrence"]),
       );
 
   Map<String, dynamic> toJson() => {
         "time": time.toIso8601String(),
-        "recurrence": recurrence,
+        "recurrence": recurrence.toString().split('.').last,
       };
 }
 
