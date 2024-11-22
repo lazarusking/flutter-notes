@@ -23,37 +23,38 @@ class NoteScreen extends ConsumerStatefulWidget {
 class _NoteScreenState extends ConsumerState<NoteScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
-  late Color? _selectedColor;
+  // late Color? _selectedColor;
   late List<NoteImage> _images = [];
   Reminder? _reminder;
   late final List<String>? _labels;
 
 //todo image rerendering on color change
   final DateFormat _dateFormat = DateFormat('MMM d, yyyy', Intl.defaultLocale);
-  Future<void> _loadImages() async {
+
+  Future<List<NoteImage>> _loadImages() async {
     final ByteData data = await rootBundle
         .load('assets/images/notes-high-resolution-logo-only.png');
-    setState(() {
-      _images = List.generate(
-          2,
-          (index) => NoteImage(
-              imageData: data.buffer.asUint8List(),
-              id: 'image_$index',
-              noteId: widget.note.id));
-    });
+    return List.generate(
+      2,
+      (index) => NoteImage(
+        imageData: data.buffer.asUint8List(),
+        id: 'image_$index',
+        noteId: widget.note.id,
+      ),
+    );
   }
 
-  late Future<void> _imagesFuture;
+  late final ValueNotifier<Color?> _selectedColor;
+
   @override
   void initState() {
     super.initState();
     _titleController.text = widget.note.title;
     _contentController.text = widget.note.content;
-    _selectedColor = widget.note.color;
-    _imagesFuture = _loadImages();
-
-    // _images = widget.note.images;
-    // _images = List.generate(5, (_) => NoteImage.generateRandom(widget.note.id));
+    // _selectedColor = widget.note.color;
+    //_selectedColor was causing the ImageGrid to rebuild so I settled on valuenotifier
+    _selectedColor = ValueNotifier(widget.note.color);
+    _images = widget.note.images;
     _reminder = widget.note.reminder;
     _labels = widget.note.labels;
     timeDilation = 1.2; // 1.0 means normal animation speed.
@@ -61,6 +62,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
 
   @override
   void dispose() {
+    _selectedColor.dispose();
     _titleController.dispose();
     _contentController.dispose();
     super.dispose();
@@ -69,20 +71,17 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
   void _showColorPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _selectedColor,
+      backgroundColor: _selectedColor.value,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.zero),
       ),
       builder: (BuildContext context) {
         return ColorPicker(
-          selectedColor: _selectedColor!,
+          selectedColor: _selectedColor.value!,
           onColorSelected: (color) {
-            // setNewState(() {
-            //   _selectedColor = color;
-            // });
-            setState(() {
-              _selectedColor = color;
-            });
+            // setState(() {});
+            //setting state here caused the rebuilding
+            _selectedColor.value = color;
           },
         );
       },
@@ -96,7 +95,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
         borderRadius: BorderRadius.all(Radius.zero),
       ),
       context: context,
-      backgroundColor: _selectedColor,
+      backgroundColor: _selectedColor.value,
       builder: (BuildContext context) {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
@@ -193,7 +192,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     final updatedNote = widget.note.copyWith(
         title: _titleController.text,
         content: _contentController.text,
-        color: _selectedColor,
+        color: _selectedColor.value,
         images: _images,
         reminder: _reminder,
         updatedAt: DateTime.now(),
@@ -207,9 +206,8 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
         ..showSnackBar(
           const SnackBar(
             duration: Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
+            behavior: SnackBarBehavior.fixed,
             content: Text('Empty note discarded'),
-            margin: EdgeInsets.only(bottom: 10),
           ),
         );
       return;
@@ -235,6 +233,8 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     return 1;
   }
 
+  final _imageGridKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -243,257 +243,270 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
           _saveOrUpdateNote();
         }
       },
-      child: Scaffold(
-        appBar: AppBar(
-          surfaceTintColor: Colors.transparent,
-          backgroundColor: _selectedColor,
-          leading: IconButton(
-            tooltip: 'Navigate back',
-            icon: const Icon(
-              Icons.arrow_back,
-              size: 20,
-            ),
-            onPressed: () {
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
+      child: ValueListenableBuilder(
+        valueListenable: _selectedColor,
+        child: RepaintBoundary(
+          key: _imageGridKey,
+          child: FutureBuilder<List<NoteImage>>(
+            future: _loadImages(), // This uses the caching system
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done) {
+                final images = snapshot.data ?? [];
+                return ImageGrid(
+                  key: ValueKey(images.hashCode),
+                  images: images,
+                );
               }
-              // _saveOrUpdateNote();
+              return const CircularProgressIndicator();
             },
           ),
-          actions: [
-            IconButton(
-              tooltip: 'Add reminder',
-              icon: const Icon(
-                Icons.add_alert_outlined,
-                size: 20,
-              ),
-              onPressed: () {},
-            ),
-          ],
         ),
-        body: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: _selectedColor,
+        builder: (context, selectedColor, imageGrid) {
+          return Scaffold(
+            appBar: AppBar(
+              surfaceTintColor: Colors.transparent,
+              backgroundColor: selectedColor,
+              leading: IconButton(
+                tooltip: 'Navigate back',
+                icon: const Icon(
+                  Icons.arrow_back,
+                  size: 20,
+                ),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
+                  // _saveOrUpdateNote();
+                },
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Add reminder',
+                  icon: const Icon(
+                    Icons.add_alert_outlined,
+                    size: 20,
+                  ),
+                  onPressed: () {},
+                ),
+              ],
             ),
-            child: Hero(
-              tag: widget.note.id,
-              child: Material(
-                type: MaterialType.transparency,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      // SizedBox(height: 8),
-                      // StaggeredGrid.count(
-                      //   crossAxisCount: 3,
-                      //   mainAxisSpacing: 4,
-                      //   crossAxisSpacing: 4,
-                      //   children: const [
-                      //     StaggeredGridTile.count(
-                      //       crossAxisCellCount: 2,
-                      //       mainAxisCellCount: 2,
-                      //       child: Text('0'),
-                      //     ),
-                      //     StaggeredGridTile.count(
-                      //       crossAxisCellCount: 2,
-                      //       mainAxisCellCount: 1,
-                      //       child: Text('1'),
-                      //     ),
-                      //     StaggeredGridTile.count(
-                      //       crossAxisCellCount: 1,
-                      //       mainAxisCellCount: 1,
-                      //       child: Text('2'),
-                      //     ),
-                      //     StaggeredGridTile.count(
-                      //       crossAxisCellCount: 1,
-                      //       mainAxisCellCount: 1,
-                      //       child: Text('3'),
-                      //     ),
-                      //     StaggeredGridTile.count(
-                      //       crossAxisCellCount: 4,
-                      //       mainAxisCellCount: 2,
-                      //       child: Text('4'),
-                      //     ),
-                      //   ],
-                      // ),
-                      ImageGrid(images: _images),
-                      // FutureBuilder(
-                      //   future: _imagesFuture,
-                      //   builder: (context, snapshot) {
-                      //     if (snapshot.connectionState ==
-                      //         ConnectionState.done) {
-                      //       return ImageGrid(images: _images);
-                      //     } else {
-                      //       return const CircularProgressIndicator();
-                      //     }
-                      //   },
-                      // ),
-                      // MasonryGridView.count(
-                      //   shrinkWrap: true,
-                      //   physics: NeverScrollableScrollPhysics(),
-                      //   crossAxisCount: 3,
-                      //   mainAxisSpacing: 4,
-                      //   crossAxisSpacing: 4,
-                      //   itemCount: _images.length,
-                      //   itemBuilder: (context, index) {
-                      //     if (index == 0) {
-                      //       return Container(
-                      //         decoration: ShapeDecoration(
-                      //           shape: RoundedRectangleBorder(
-                      //             side: BorderSide(
-                      //               color: Color(0xFF5f6368),
-                      //               width: 1.5,
-                      //             ),
-                      //             borderRadius: BorderRadius.circular(8),
-                      //           ),
-                      //         ),
-                      //         child: Image.memory(
-                      //           Uint8List.fromList(_images[index].imageData),
-                      //           fit: BoxFit.cover,
-                      //           height:
-                      //               200, // Adjust the height for the first large image
-                      //         ),
-                      //       );
-                      //     } else {
-                      //       return Container(
-                      //         decoration: ShapeDecoration(
-                      //           shape: RoundedRectangleBorder(
-                      //             side: BorderSide(
-                      //               color: Color(0xFF5f6368),
-                      //               width: 1.5,
-                      //             ),
-                      //             borderRadius: BorderRadius.circular(8),
-                      //           ),
-                      //         ),
-                      //         child: Image.memory(
-                      //           Uint8List.fromList(_images[index].imageData),
-                      //           fit: BoxFit.cover,
-                      //           height:
-                      //               100, // Adjust the height for smaller images
-                      //         ),
-                      //       );
-                      //     }
-                      //   },
-                      // ),
-                      // StaggeredGrid.count(
-                      //   crossAxisCount: 3,
-                      //   mainAxisSpacing: 4,
-                      //   crossAxisSpacing: 4,
-                      //   children: _images.asMap().entries.map((entry) {
-                      //     int index = entry.key;
-                      //     NoteImage image = entry.value;
-                      //     var imgblob = Image.memory(
-                      //         Uint8List.fromList(image.imageData),
-                      //         fit: BoxFit.cover);
-                      //     return StaggeredGridTile.count(
-                      //       crossAxisCellCount: (index % 3 == 0) ? 3 : 1,
-                      //       mainAxisCellCount: (index % 3 == 0) ? 2 : 1,
-                      //       child: AspectRatio(
-                      //         aspectRatio:
-                      //             (imgblob.width ?? 1) / (imgblob.height ?? 1),
-                      //         child: Image.memory(
-                      //           Uint8List.fromList(image.imageData),
-                      //           fit: BoxFit.cover,
-                      //         ),
-                      //       ),
-                      //     );
-                      //   }).toList(),
-                      // ),
+            body: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selectedColor,
+                ),
+                child: Hero(
+                  tag: widget.note.id,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          // StaggeredGrid.count(
+                          //   crossAxisCount: 3,
+                          //   mainAxisSpacing: 4,
+                          //   crossAxisSpacing: 4,
+                          //   children: const [
+                          //     StaggeredGridTile.count(
+                          //       crossAxisCellCount: 2,
+                          //       mainAxisCellCount: 2,
+                          //       child: Text('0'),
+                          //     ),
+                          //     StaggeredGridTile.count(
+                          //       crossAxisCellCount: 2,
+                          //       mainAxisCellCount: 1,
+                          //       child: Text('1'),
+                          //     ),
+                          //     StaggeredGridTile.count(
+                          //       crossAxisCellCount: 1,
+                          //       mainAxisCellCount: 1,
+                          //       child: Text('2'),
+                          //     ),
+                          //     StaggeredGridTile.count(
+                          //       crossAxisCellCount: 1,
+                          //       mainAxisCellCount: 1,
+                          //       child: Text('3'),
+                          //     ),
+                          //     StaggeredGridTile.count(
+                          //       crossAxisCellCount: 4,
+                          //       mainAxisCellCount: 2,
+                          //       child: Text('4'),
+                          //     ),
+                          //   ],
+                          // ),
+                          // ImageGrid(images: _images),
+                          imageGrid!,
 
-                      // GridView.custom(
-                      //   shrinkWrap: true,
-                      //   physics: NeverScrollableScrollPhysics(),
-                      //   gridDelegate: SliverQuiltedGridDelegate(
-                      //     crossAxisCount: 4,
-                      //     mainAxisSpacing: 4,
-                      //     crossAxisSpacing: 4,
-                      //     repeatPattern: QuiltedGridRepeatPattern.inverted,
-                      //     pattern: [
-                      //       QuiltedGridTile(2, 2),
-                      //       QuiltedGridTile(1, 1),
-                      //       QuiltedGridTile(1, 1),
-                      //       QuiltedGridTile(1, 2),
-                      //     ],
-                      //   ),
-                      //   childrenDelegate: SliverChildBuilderDelegate(
-                      //     (context, index) => Text('$index'),
-                      //   ),
-                      // ),
-                      TextField(
-                        controller: _titleController,
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w600),
-                        showCursor:
-                            MediaQuery.of(context).viewInsets.bottom != 0,
-                        decoration: const InputDecoration(
-                          hintText: 'Title',
-                          border: InputBorder.none,
-                        ),
-                        maxLines: null,
+                          // MasonryGridView.count(
+                          //   shrinkWrap: true,
+                          //   physics: NeverScrollableScrollPhysics(),
+                          //   crossAxisCount: 3,
+                          //   mainAxisSpacing: 4,
+                          //   crossAxisSpacing: 4,
+                          //   itemCount: _images.length,
+                          //   itemBuilder: (context, index) {
+                          //     if (index == 0) {
+                          //       return Container(
+                          //         decoration: ShapeDecoration(
+                          //           shape: RoundedRectangleBorder(
+                          //             side: BorderSide(
+                          //               color: Color(0xFF5f6368),
+                          //               width: 1.5,
+                          //             ),
+                          //             borderRadius: BorderRadius.circular(8),
+                          //           ),
+                          //         ),
+                          //         child: Image.memory(
+                          //           Uint8List.fromList(_images[index].imageData),
+                          //           fit: BoxFit.cover,
+                          //           height:
+                          //               200, // Adjust the height for the first large image
+                          //         ),
+                          //       );
+                          //     } else {
+                          //       return Container(
+                          //         decoration: ShapeDecoration(
+                          //           shape: RoundedRectangleBorder(
+                          //             side: BorderSide(
+                          //               color: Color(0xFF5f6368),
+                          //               width: 1.5,
+                          //             ),
+                          //             borderRadius: BorderRadius.circular(8),
+                          //           ),
+                          //         ),
+                          //         child: Image.memory(
+                          //           Uint8List.fromList(_images[index].imageData),
+                          //           fit: BoxFit.cover,
+                          //           height:
+                          //               100, // Adjust the height for smaller images
+                          //         ),
+                          //       );
+                          //     }
+                          //   },
+                          // ),
+                          // StaggeredGrid.count(
+                          //   crossAxisCount: 3,
+                          //   mainAxisSpacing: 4,
+                          //   crossAxisSpacing: 4,
+                          //   children: _images.asMap().entries.map((entry) {
+                          //     int index = entry.key;
+                          //     NoteImage image = entry.value;
+                          //     var imgblob = Image.memory(
+                          //         Uint8List.fromList(image.imageData),
+                          //         fit: BoxFit.cover);
+                          //     return StaggeredGridTile.count(
+                          //       crossAxisCellCount: (index % 3 == 0) ? 3 : 1,
+                          //       mainAxisCellCount: (index % 3 == 0) ? 2 : 1,
+                          //       child: AspectRatio(
+                          //         aspectRatio:
+                          //             (imgblob.width ?? 1) / (imgblob.height ?? 1),
+                          //         child: Image.memory(
+                          //           Uint8List.fromList(image.imageData),
+                          //           fit: BoxFit.cover,
+                          //         ),
+                          //       ),
+                          //     );
+                          //   }).toList(),
+                          // ),
+
+                          // GridView.custom(
+                          //   shrinkWrap: true,
+                          //   physics: NeverScrollableScrollPhysics(),
+                          //   gridDelegate: SliverQuiltedGridDelegate(
+                          //     crossAxisCount: 4,
+                          //     mainAxisSpacing: 4,
+                          //     crossAxisSpacing: 4,
+                          //     repeatPattern: QuiltedGridRepeatPattern.inverted,
+                          //     pattern: [
+                          //       QuiltedGridTile(2, 2),
+                          //       QuiltedGridTile(1, 1),
+                          //       QuiltedGridTile(1, 1),
+                          //       QuiltedGridTile(1, 2),
+                          //     ],
+                          //   ),
+                          //   childrenDelegate: SliverChildBuilderDelegate(
+                          //     (context, index) => Text('$index'),
+                          //   ),
+                          // ),
+                          TextField(
+                            controller: _titleController,
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w600),
+                            showCursor:
+                                MediaQuery.of(context).viewInsets.bottom != 0,
+                            decoration: const InputDecoration(
+                              hintText: 'Title',
+                              border: InputBorder.none,
+                            ),
+                            maxLines: null,
+                          ),
+                          TextField(
+                            controller: _contentController,
+                            showCursor:
+                                MediaQuery.of(context).viewInsets.bottom != 0,
+                            decoration: const InputDecoration(
+                              hintText: 'Note',
+                              border: InputBorder.none,
+                            ),
+                            maxLines: null,
+                          ),
+                          if (_labels!.isNotEmpty) NoteLabels(labels: _labels),
+                        ],
                       ),
-                      TextField(
-                        controller: _contentController,
-                        showCursor:
-                            MediaQuery.of(context).viewInsets.bottom != 0,
-                        decoration: const InputDecoration(
-                          hintText: 'Note',
-                          border: InputBorder.none,
-                        ),
-                        maxLines: null,
+                    ),
+                  ),
+                )),
+            floatingActionButton: kDebugMode
+                ? FloatingActionButton(
+                    onPressed: () {
+                      debugPaintSizeEnabled = !debugPaintSizeEnabled;
+                    },
+                    child: const Icon(Icons.bug_report),
+                  )
+                : null,
+            bottomNavigationBar: Padding(
+              padding: MediaQuery.of(context).viewInsets,
+              child: BottomAppBar(
+                padding: EdgeInsets.zero,
+                color: selectedColor,
+                // height: kBottomNavigationBarHeight +
+                //     MediaQuery.of(context).viewInsets.bottom,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
+                  margin: const EdgeInsets.all(0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.color_lens),
+                        onPressed: () => _showColorPicker(),
                       ),
-                      if (_labels!.isNotEmpty) NoteLabels(labels: _labels),
+                      const Spacer(),
+                      Align(
+                        alignment: Alignment.topCenter,
+                        heightFactor: 1.8,
+                        child: Text(
+                          'Edited ${_dateFormat.format(widget.note.updatedAt)}',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.white70),
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.more_vert),
+                        onPressed: () {
+                          _showBottomDrawer(context);
+                        },
+                      ),
                     ],
                   ),
                 ),
               ),
-            )),
-        floatingActionButton: kDebugMode
-            ? FloatingActionButton(
-                onPressed: () {
-                  debugPaintSizeEnabled = !debugPaintSizeEnabled;
-                },
-                child: const Icon(Icons.bug_report),
-              )
-            : null,
-        bottomNavigationBar: Padding(
-          padding: MediaQuery.of(context).viewInsets,
-          child: BottomAppBar(
-            padding: EdgeInsets.zero,
-            color: _selectedColor,
-            // height: kBottomNavigationBarHeight +
-            //     MediaQuery.of(context).viewInsets.bottom,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
-              margin: const EdgeInsets.all(0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.color_lens),
-                    onPressed: () => _showColorPicker(),
-                  ),
-                  const Spacer(),
-                  Align(
-                    alignment: Alignment.topCenter,
-                    heightFactor: 1.8,
-                    child: Text(
-                      'Edited ${_dateFormat.format(widget.note.updatedAt)}',
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.white70),
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.more_vert),
-                    onPressed: () {
-                      _showBottomDrawer(context);
-                    },
-                  ),
-                ],
-              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
