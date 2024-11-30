@@ -34,4 +34,4 @@ flutter run
 
 ## Status
 
-This project is incomplete and under still under development(lest I forget).
+This project is incomplete and still under development(lest I forget).
