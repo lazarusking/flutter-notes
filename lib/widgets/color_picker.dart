@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes/providers/notes_provider.dart';
+import 'package:notes/utils/helpers.dart';
 
 class ColorPicker extends StatefulWidget {
   final Color selectedColor;
@@ -30,66 +32,82 @@ class _ColorPickerState extends State<ColorPicker> {
   Widget build(BuildContext context) {
     //stateful builder is probably not needed again since
     //I moved the whole thing from a method to a class whew won't touch
-    return StatefulBuilder(builder: (context, setNewState) {
-      return Material(
-          color: _selectedColor,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const ListTile(
-              title: Text('Pick a color'),
-            ),
-            Container(
-              padding: const EdgeInsets.all(11.0),
-              child: widget.isBlockStyle
-                  ? GridView.count(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.all(1.0),
-                      crossAxisCount: 4, // Increase the number of columns
-                      crossAxisSpacing: 0,
-                      mainAxisSpacing: 0,
-                      childAspectRatio: 1,
-                      children: [
-                        _buildColorOptions(
-                          color: const Color(0xFF202124),
-                          colorName: 'Default color',
-                        ),
-                        ...colors.entries.map((entry) {
-                          final colorName = entry.key;
-                          final colorValue = entry.value;
-                          return _buildColorOptions(
-                            color: colorValue,
-                            colorName: colorName,
-                          );
-                        }),
-                      ],
-                    )
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _buildColorOptions(
-                              color: defaultColor, colorName: "Default color"),
-                          ...colors.entries.map((entry) {
-                            final colorName = entry.key;
-                            final value = entry.value;
+    return Consumer(
+      builder: (context, ref, child) {
+        // final themeMode = ref.watch(themeModeProvider);
+        // final isDark = themeMode == ThemeMode.dark ||
+        //     (themeMode == ThemeMode.system &&
+        //         WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+        //             Brightness.dark);
+        // final themeColors = isDark ? darkColors : lightColors;
+        final Color defaultColor = Helpers.getDefaultBackgroundColor(context);
 
-                            return _buildColorOptions(
-                                color: value, colorName: colorName);
-                          }),
-                        ],
-                      ),
-                    ),
-            ),
-            const SizedBox(
-              height: 40,
-            )
-          ]));
-    });
+        return StatefulBuilder(builder: (context, setNewState) {
+          return Material(
+              color: widget.isBlockStyle
+                  ? Colors.transparent
+                  : _selectedColor.getThemeAwareColor(ref),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                ListTile(
+                  title: Text('Pick a color $_selectedColor'),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(11.0),
+                  child: widget.isBlockStyle
+                      ? GridView.count(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.all(1.0),
+                          crossAxisCount: 4, // Increase the number of columns
+                          crossAxisSpacing: 0,
+                          mainAxisSpacing: 0,
+                          childAspectRatio: 1,
+                          children: [
+                            _buildColorOptions(
+                              color: defaultColor,
+                              colorName: 'Default color',
+                            ),
+                            ...darkColors.entries.map((entry) {
+                              final colorName = entry.key;
+                              final colorValue = entry.value;
+                              return _buildColorOptions(
+                                color: colorValue,
+                                colorName: colorName,
+                              );
+                            }),
+                          ],
+                        )
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildColorOptions(
+                                  color: defaultColor,
+                                  colorName: "Default color"),
+                              ...darkColors.entries.map((entry) {
+                                final colorName = entry.key;
+                                final value = entry.value;
+
+                                return _buildColorOptions(
+                                    color: value, colorName: colorName);
+                              }),
+                            ],
+                          ),
+                        ),
+                ),
+                const SizedBox(
+                  height: 40,
+                )
+              ]));
+        });
+      },
+    );
   }
 
-  Widget _buildColorOptions(
-      {required Color color,
-      required colorName,
-      Color defaultColor = const Color(0xFF202124)}) {
+  Widget _buildColorOptions({required Color color, required colorName}) {
+    final themeAwareColor =
+        getThemeAwareColor(color, Theme.of(context).brightness);
+    final adaptiveColorSelection =
+        getThemeAwareColor(_selectedColor, Theme.of(context).brightness);
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -108,27 +126,29 @@ class _ColorPickerState extends State<ColorPicker> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: color,
+                  color: themeAwareColor,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: color == _selectedColor
-                        ? Colors.grey.shade400
+                    color: themeAwareColor == adaptiveColorSelection
+                        ? Colors.lightBlue
                         : Colors.grey.shade500,
-                    width: color == _selectedColor ? 2 : 0.5,
+                    width: themeAwareColor == adaptiveColorSelection ? 2 : 0.5,
                   ),
                 ),
               ),
-              if (color == _selectedColor)
-                Icon(
+              if (themeAwareColor == adaptiveColorSelection)
+                const Icon(
                   Icons.check,
-                  color: Colors.grey.shade300,
+                  size: 30,
+                  color: Colors.lightBlue,
                 ),
               if (colorName == "Default color")
                 Icon(
-                  _selectedColor == defaultColor
+                  size: 20,
+                  adaptiveColorSelection == Colors.transparent
                       ? Icons.check
                       : Icons.invert_colors_off_outlined,
-                  color: Colors.grey.shade300,
+                  color: Colors.grey,
                 )
             ],
           ),
