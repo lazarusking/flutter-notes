@@ -8,7 +8,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:intl/intl.dart';
 import 'package:notes/models/notes/note.dart';
+import 'package:notes/presentation/screens/select_labels.dart';
 import 'package:notes/providers/notes_provider.dart';
+import 'package:notes/utils/helpers.dart';
 import 'package:notes/widgets/color_picker.dart';
 
 class NoteScreen extends ConsumerStatefulWidget {
@@ -26,7 +28,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
   // late Color? _selectedColor;
   late List<NoteImage> _images = [];
   Reminder? _reminder;
-  late final List<String>? _labels;
+  List<Label>? _labels;
 
 //todo image rerendering on color change
   final DateFormat _dateFormat = DateFormat('MMM d, yyyy', Intl.defaultLocale);
@@ -57,7 +59,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     _images = widget.note.images;
     _reminder = widget.note.reminder;
     _labels = widget.note.labels;
-    timeDilation = 1.2; // 1.0 means normal animation speed.
+    timeDilation = 1; // 1.0 means normal animation speed.
   }
 
   @override
@@ -68,10 +70,14 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     super.dispose();
   }
 
+  Color getThemeAwareSelectedColor() {
+    return _selectedColor.value!.getThemeAwareColor(ref);
+  }
+
   void _showColorPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _selectedColor.value,
+      backgroundColor: Helpers.getDefaultBackgroundColor(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.zero),
       ),
@@ -88,6 +94,8 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     );
   }
 
+  Color getThemeAwareColor() => _selectedColor.value!.getThemeAwareColor(ref);
+
   void _showBottomDrawer(BuildContext context) {
     showModalBottomSheet(
       useSafeArea: true,
@@ -95,7 +103,9 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
         borderRadius: BorderRadius.all(Radius.zero),
       ),
       context: context,
-      backgroundColor: _selectedColor.value,
+      backgroundColor: _selectedColor.value == Colors.transparent
+          ? Helpers.getDefaultBackgroundColor(context)
+          : getThemeAwareSelectedColor(),
       builder: (BuildContext context) {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
@@ -160,8 +170,22 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
               ListTile(
                 leading: const Icon(Icons.label_outline),
                 title: const Text('Labels'),
-                onTap: () {
-                  Navigator.of(context).pop();
+                onTap: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const SelectLabelsScreen()),
+                  );
+                  // print("result");
+                  // print(result);
+                  if (result != null && result is Set<String>) {
+                    print("lets go");
+                    print(result);
+                    await addlabels(result);
+                    // setState(() {
+                    //   _labels = result;
+                    // });
+                  }
                 },
               ),
               ListTile(
@@ -179,16 +203,26 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
     );
   }
 
-  void _addLabel(String label) {
-    setState(() {
-      if (_labels!.contains(label)) {
-        _labels.add(label);
+  Future<void> addlabels(Set<String> result) async {
+    final updatedLabels = List<Label>.from(_labels!);
+    for (var label in result) {
+      // await _addLabel(label);
+      final labelsNotifier = ref.read(labelsProvider.notifier);
+      final existingLabel = await labelsNotifier.getLabelById(label);
+      print('$existingLabel existing');
+      if (existingLabel != null && !_labels!.contains(existingLabel)) {
+        updatedLabels.add(existingLabel);
+
+        setState(() {
+          _labels = updatedLabels;
+        });
       }
-    });
+      print('$updatedLabels update');
+    }
   }
 
   /// Updates an existing note or saves a new note if it doesn't exist.
-  void _saveOrUpdateNote() {
+  Future<void> _saveOrUpdateNote() async {
     final updatedNote = widget.note.copyWith(
         title: _titleController.text,
         content: _contentController.text,
@@ -198,9 +232,9 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
         updatedAt: DateTime.now(),
         labels: _labels);
 
-    final notesNotifier = ref.read(notesProvider.notifier);
+    // final notesNotifier = ref.read(notesProvider.notifier);
     if (updatedNote.title.isEmpty && updatedNote.content.isEmpty) {
-      notesNotifier.deleteNoteById(updatedNote.id);
+      ref.read(notesProvider.notifier).deleteNoteById(updatedNote.id);
       ScaffoldMessenger.of(context)
         ..removeCurrentSnackBar()
         ..showSnackBar(
@@ -213,24 +247,10 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
       return;
     }
     if (updatedNote.id.isEmpty) {
-      notesNotifier.createNote(updatedNote);
+      await ref.read(notesProvider.notifier).createNote(updatedNote);
     } else {
-      notesNotifier.updateNote(updatedNote);
+      ref.read(notesProvider.notifier).updateNote(updatedNote);
     }
-  }
-
-  int _calculateCrossAxisCount(int itemCount) {
-    if (itemCount <= 2) return 2;
-    if (itemCount <= 4) return 2;
-    if (itemCount <= 6) return 3;
-    return 4;
-  }
-
-  double _calculateChildAspectRatio(int itemCount) {
-    if (itemCount <= 2) return 4 / 3;
-    if (itemCount <= 4) return 3 / 2;
-    if (itemCount <= 6) return 1;
-    return 1;
   }
 
   final _imageGridKey = GlobalKey();
@@ -247,25 +267,30 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
         valueListenable: _selectedColor,
         child: RepaintBoundary(
           key: _imageGridKey,
-          child: FutureBuilder<List<NoteImage>>(
-            future: _loadImages(), // This uses the caching system
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.done) {
-                final images = snapshot.data ?? [];
-                return ImageGrid(
-                  key: ValueKey(images.hashCode),
-                  images: images,
-                );
-              }
-              return const CircularProgressIndicator();
-            },
-          ),
+          child: _images.isNotEmpty
+              ? ImageGrid(
+                  key: ValueKey(_images.hashCode),
+                  images: _images,
+                )
+              : FutureBuilder<List<NoteImage>>(
+                  future: _loadImages(), // This uses the caching system
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.done) {
+                      final images = snapshot.data ?? [];
+                      return ImageGrid(
+                        key: ValueKey(images.hashCode),
+                        images: images,
+                      );
+                    }
+                    return const CircularProgressIndicator.adaptive();
+                  },
+                ),
         ),
         builder: (context, selectedColor, imageGrid) {
           return Scaffold(
             appBar: AppBar(
               surfaceTintColor: Colors.transparent,
-              backgroundColor: selectedColor,
+              backgroundColor: selectedColor!.getThemeAwareColor(ref),
               leading: IconButton(
                 tooltip: 'Navigate back',
                 icon: const Icon(
@@ -294,166 +319,191 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: selectedColor,
+                  color: selectedColor.getThemeAwareColor(ref),
                 ),
                 child: Hero(
                   tag: widget.note.id,
                   child: Material(
                     type: MaterialType.transparency,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          // StaggeredGrid.count(
-                          //   crossAxisCount: 3,
-                          //   mainAxisSpacing: 4,
-                          //   crossAxisSpacing: 4,
-                          //   children: const [
-                          //     StaggeredGridTile.count(
-                          //       crossAxisCellCount: 2,
-                          //       mainAxisCellCount: 2,
-                          //       child: Text('0'),
-                          //     ),
-                          //     StaggeredGridTile.count(
-                          //       crossAxisCellCount: 2,
-                          //       mainAxisCellCount: 1,
-                          //       child: Text('1'),
-                          //     ),
-                          //     StaggeredGridTile.count(
-                          //       crossAxisCellCount: 1,
-                          //       mainAxisCellCount: 1,
-                          //       child: Text('2'),
-                          //     ),
-                          //     StaggeredGridTile.count(
-                          //       crossAxisCellCount: 1,
-                          //       mainAxisCellCount: 1,
-                          //       child: Text('3'),
-                          //     ),
-                          //     StaggeredGridTile.count(
-                          //       crossAxisCellCount: 4,
-                          //       mainAxisCellCount: 2,
-                          //       child: Text('4'),
-                          //     ),
-                          //   ],
-                          // ),
-                          // ImageGrid(images: _images),
-                          imageGrid!,
-
-                          // MasonryGridView.count(
-                          //   shrinkWrap: true,
-                          //   physics: NeverScrollableScrollPhysics(),
-                          //   crossAxisCount: 3,
-                          //   mainAxisSpacing: 4,
-                          //   crossAxisSpacing: 4,
-                          //   itemCount: _images.length,
-                          //   itemBuilder: (context, index) {
-                          //     if (index == 0) {
-                          //       return Container(
-                          //         decoration: ShapeDecoration(
-                          //           shape: RoundedRectangleBorder(
-                          //             side: BorderSide(
-                          //               color: Color(0xFF5f6368),
-                          //               width: 1.5,
-                          //             ),
-                          //             borderRadius: BorderRadius.circular(8),
-                          //           ),
-                          //         ),
-                          //         child: Image.memory(
-                          //           Uint8List.fromList(_images[index].imageData),
-                          //           fit: BoxFit.cover,
-                          //           height:
-                          //               200, // Adjust the height for the first large image
-                          //         ),
-                          //       );
-                          //     } else {
-                          //       return Container(
-                          //         decoration: ShapeDecoration(
-                          //           shape: RoundedRectangleBorder(
-                          //             side: BorderSide(
-                          //               color: Color(0xFF5f6368),
-                          //               width: 1.5,
-                          //             ),
-                          //             borderRadius: BorderRadius.circular(8),
-                          //           ),
-                          //         ),
-                          //         child: Image.memory(
-                          //           Uint8List.fromList(_images[index].imageData),
-                          //           fit: BoxFit.cover,
-                          //           height:
-                          //               100, // Adjust the height for smaller images
-                          //         ),
-                          //       );
-                          //     }
-                          //   },
-                          // ),
-                          // StaggeredGrid.count(
-                          //   crossAxisCount: 3,
-                          //   mainAxisSpacing: 4,
-                          //   crossAxisSpacing: 4,
-                          //   children: _images.asMap().entries.map((entry) {
-                          //     int index = entry.key;
-                          //     NoteImage image = entry.value;
-                          //     var imgblob = Image.memory(
-                          //         Uint8List.fromList(image.imageData),
-                          //         fit: BoxFit.cover);
-                          //     return StaggeredGridTile.count(
-                          //       crossAxisCellCount: (index % 3 == 0) ? 3 : 1,
-                          //       mainAxisCellCount: (index % 3 == 0) ? 2 : 1,
-                          //       child: AspectRatio(
-                          //         aspectRatio:
-                          //             (imgblob.width ?? 1) / (imgblob.height ?? 1),
-                          //         child: Image.memory(
-                          //           Uint8List.fromList(image.imageData),
-                          //           fit: BoxFit.cover,
-                          //         ),
-                          //       ),
-                          //     );
-                          //   }).toList(),
-                          // ),
-
-                          // GridView.custom(
-                          //   shrinkWrap: true,
-                          //   physics: NeverScrollableScrollPhysics(),
-                          //   gridDelegate: SliverQuiltedGridDelegate(
-                          //     crossAxisCount: 4,
-                          //     mainAxisSpacing: 4,
-                          //     crossAxisSpacing: 4,
-                          //     repeatPattern: QuiltedGridRepeatPattern.inverted,
-                          //     pattern: [
-                          //       QuiltedGridTile(2, 2),
-                          //       QuiltedGridTile(1, 1),
-                          //       QuiltedGridTile(1, 1),
-                          //       QuiltedGridTile(1, 2),
-                          //     ],
-                          //   ),
-                          //   childrenDelegate: SliverChildBuilderDelegate(
-                          //     (context, index) => Text('$index'),
-                          //   ),
-                          // ),
-                          TextField(
-                            controller: _titleController,
-                            style: const TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.w600),
-                            showCursor:
-                                MediaQuery.of(context).viewInsets.bottom != 0,
-                            decoration: const InputDecoration(
-                              hintText: 'Title',
-                              border: InputBorder.none,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return SingleChildScrollView(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight,
                             ),
-                            maxLines: null,
-                          ),
-                          TextField(
-                            controller: _contentController,
-                            showCursor:
-                                MediaQuery.of(context).viewInsets.bottom != 0,
-                            decoration: const InputDecoration(
-                              hintText: 'Note',
-                              border: InputBorder.none,
+                            child: IntrinsicHeight(
+                              child: Column(
+                                children: [
+                                  imageGrid!,
+                                  // StaggeredGrid.count(
+                                  //   crossAxisCount: 3,
+                                  //   mainAxisSpacing: 4,
+                                  //   crossAxisSpacing: 4,
+                                  //   children: const [
+                                  //     StaggeredGridTile.count(
+                                  //       crossAxisCellCount: 2,
+                                  //       mainAxisCellCount: 2,
+                                  //       child: Text('0'),
+                                  //     ),
+                                  //     StaggeredGridTile.count(
+                                  //       crossAxisCellCount: 2,
+                                  //       mainAxisCellCount: 1,
+                                  //       child: Text('1'),
+                                  //     ),
+                                  //     StaggeredGridTile.count(
+                                  //       crossAxisCellCount: 1,
+                                  //       mainAxisCellCount: 1,
+                                  //       child: Text('2'),
+                                  //     ),
+                                  //     StaggeredGridTile.count(
+                                  //       crossAxisCellCount: 1,
+                                  //       mainAxisCellCount: 1,
+                                  //       child: Text('3'),
+                                  //     ),
+                                  //     StaggeredGridTile.count(
+                                  //       crossAxisCellCount: 4,
+                                  //       mainAxisCellCount: 2,
+                                  //       child: Text('4'),
+                                  //     ),
+                                  //   ],
+                                  // ),
+                                  // ImageGrid(images: _images),
+                                  // MasonryGridView.count(
+                                  //   shrinkWrap: true,
+                                  //   physics: NeverScrollableScrollPhysics(),
+                                  //   crossAxisCount: 3,
+                                  //   mainAxisSpacing: 4,
+                                  //   crossAxisSpacing: 4,
+                                  //   itemCount: _images.length,
+                                  //   itemBuilder: (context, index) {
+                                  //     if (index == 0) {
+                                  //       return Container(
+                                  //         decoration: ShapeDecoration(
+                                  //           shape: RoundedRectangleBorder(
+                                  //             side: BorderSide(
+                                  //               color: Color(0xFF5f6368),
+                                  //               width: 1.5,
+                                  //             ),
+                                  //             borderRadius: BorderRadius.circular(8),
+                                  //           ),
+                                  //         ),
+                                  //         child: Image.memory(
+                                  //           Uint8List.fromList(_images[index].imageData),
+                                  //           fit: BoxFit.cover,
+                                  //           height:
+                                  //               200, // Adjust the height for the first large image
+                                  //         ),
+                                  //       );
+                                  //     } else {
+                                  //       return Container(
+                                  //         decoration: ShapeDecoration(
+                                  //           shape: RoundedRectangleBorder(
+                                  //             side: BorderSide(
+                                  //               color: Color(0xFF5f6368),
+                                  //               width: 1.5,
+                                  //             ),
+                                  //             borderRadius: BorderRadius.circular(8),
+                                  //           ),
+                                  //         ),
+                                  //         child: Image.memory(
+                                  //           Uint8List.fromList(_images[index].imageData),
+                                  //           fit: BoxFit.cover,
+                                  //           height:
+                                  //               100, // Adjust the height for smaller images
+                                  //         ),
+                                  //       );
+                                  //     }
+                                  //   },
+                                  // ),
+                                  // StaggeredGrid.count(
+                                  //   crossAxisCount: 3,
+                                  //   mainAxisSpacing: 4,
+                                  //   crossAxisSpacing: 4,
+                                  //   children: _images.asMap().entries.map((entry) {
+                                  //     int index = entry.key;
+                                  //     NoteImage image = entry.value;
+                                  //     var imgblob = Image.memory(
+                                  //         Uint8List.fromList(image.imageData),
+                                  //         fit: BoxFit.cover);
+                                  //     return StaggeredGridTile.count(
+                                  //       crossAxisCellCount: (index % 3 == 0) ? 3 : 1,
+                                  //       mainAxisCellCount: (index % 3 == 0) ? 2 : 1,
+                                  //       child: AspectRatio(
+                                  //         aspectRatio:
+                                  //             (imgblob.width ?? 1) / (imgblob.height ?? 1),
+                                  //         child: Image.memory(
+                                  //           Uint8List.fromList(image.imageData),
+                                  //           fit: BoxFit.cover,
+                                  //         ),
+                                  //       ),
+                                  //     );
+                                  //   }).toList(),
+                                  // ),
+
+                                  // GridView.custom(
+                                  //   shrinkWrap: true,
+                                  //   physics: NeverScrollableScrollPhysics(),
+                                  //   gridDelegate: SliverQuiltedGridDelegate(
+                                  //     crossAxisCount: 4,
+                                  //     mainAxisSpacing: 4,
+                                  //     crossAxisSpacing: 4,
+                                  //     repeatPattern: QuiltedGridRepeatPattern.inverted,
+                                  //     pattern: [
+                                  //       QuiltedGridTile(2, 2),
+                                  //       QuiltedGridTile(1, 1),
+                                  //       QuiltedGridTile(1, 1),
+                                  //       QuiltedGridTile(1, 2),
+                                  //     ],
+                                  //   ),
+                                  //   childrenDelegate: SliverChildBuilderDelegate(
+                                  //     (context, index) => Text('$index'),
+                                  //   ),
+                                  // ),
+                                  TextField(
+                                    controller: _titleController,
+                                    style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600),
+                                    showCursor: MediaQuery.of(context)
+                                            .viewInsets
+                                            .bottom !=
+                                        0,
+                                    decoration: const InputDecoration(
+                                      hintText: 'Title',
+                                      border: InputBorder.none,
+                                    ),
+                                    maxLines: null,
+                                  ),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        FocusScope.of(context)
+                                            .requestFocus(FocusNode());
+                                      },
+                                      child: TextField(
+                                        controller: _contentController,
+                                        showCursor: MediaQuery.of(context)
+                                                .viewInsets
+                                                .bottom !=
+                                            0,
+                                        decoration: const InputDecoration(
+                                          hintText: 'Note',
+                                          border: InputBorder.none,
+                                        ),
+                                        maxLines: null,
+                                        expands: true,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_labels!.isNotEmpty)
+                                    NoteLabels(labels: _labels ?? []),
+                                ],
+                              ),
                             ),
-                            maxLines: null,
                           ),
-                          if (_labels!.isNotEmpty) NoteLabels(labels: _labels),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ),
                 )),
@@ -469,7 +519,7 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
               padding: MediaQuery.of(context).viewInsets,
               child: BottomAppBar(
                 padding: EdgeInsets.zero,
-                color: selectedColor,
+                color: selectedColor.getThemeAwareColor(ref),
                 // height: kBottomNavigationBarHeight +
                 //     MediaQuery.of(context).viewInsets.bottom,
                 child: Container(
@@ -489,8 +539,10 @@ class _NoteScreenState extends ConsumerState<NoteScreen> {
                         heightFactor: 1.8,
                         child: Text(
                           'Edited ${_dateFormat.format(widget.note.updatedAt)}',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.white70),
+                          style:
+                              Theme.of(context).textTheme.bodySmall!.copyWith(
+                                    fontSize: 12,
+                                  ),
                         ),
                       ),
                       const Spacer(),
@@ -555,7 +607,7 @@ class ImageGrid extends StatelessWidget {
 
 //a widget that displays the labels of a note
 class NoteLabels extends StatelessWidget {
-  final List<String> labels;
+  final List<Label> labels;
 
   const NoteLabels({super.key, required this.labels});
 
@@ -586,7 +638,7 @@ class NoteLabels extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      label,
+                      label.name,
                     ),
                     // SizedBox(width: 4),
                     // GestureDetector(
