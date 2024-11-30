@@ -54,7 +54,7 @@ class DBNoteRepository implements NoteRepository {
       {Color? color,
       List<NoteImage>? images,
       Reminder? reminder,
-      List<String>? labels,
+      List<Label>? labels,
       int? position}) async {
     final newNote = Note(
       id: _uuid.v4(),
@@ -70,5 +70,37 @@ class DBNoteRepository implements NoteRepository {
 
     await _dbHelper.insertNoteWithRelations(newNote);
     return newNote;
+  }
+
+//==========Labels=============================================
+
+  @override
+  Future<List<Label>> getLabels() async {
+    return await _dbHelper.queryAllLabels();
+  }
+
+  @override
+  Future<void> createLabel(Label label) async {
+    await _dbHelper.insertLabel(label);
+  }
+
+  @override
+  Future<void> deleteLabelById(String id) async {
+    await _dbHelper.deleteLabelById(id);
+  }
+
+  @override
+  Future<Label?> getLabelById(String id) async {
+    return await _dbHelper.getLabelById(id);
+  }
+
+  @override
+  Future<Label?> getLabelByName(String name) async {
+    return await _dbHelper.getLabelByName(name);
+  }
+
+  @override
+  Future<void> updateLabel(Label label) async {
+    await _dbHelper.updateLabel(label);
   }
 }

@@ -1,10 +1,11 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notes/models/notes/note.dart';
 import 'package:notes/models/notes/note_repository.dart';
+import 'package:notes/providers/theme_provider.dart';
 import 'package:notes/repositories/in_memory_note_repository.dart';
 import 'package:uuid/uuid.dart';
-import 'dart:math';
 
 const colors = {
   'coral': Color(0xFF77172E),
@@ -19,7 +20,63 @@ const colors = {
   'clay': Color(0xFF4B443A),
   'chalk': Color(0xFF232427)
 };
-const defaultColor = Color(0xFF202124);
+const darkColors = {
+  'coral': Color(0xFF77172E),
+  'peach': Color(0xFF692B17),
+  'sand': Color(0xFF7C4A03),
+  'mint': Color(0xFF264D3B),
+  'sage': Color(0xFF0C625D),
+  'fog': Color(0xFF256377),
+  'storm': Color(0xFF284255),
+  'dusk': Color(0xFF472E5B),
+  'blossom': Color(0xFF6C394F),
+  'clay': Color(0xFF4B443A),
+  'chalk': Color(0xFF232427)
+};
+
+const lightColors = {
+  'coral': Color(0xFFFAAFAF),
+  'peach': Color(0xFFFDCFE9),
+  'sand': Color(0xFFE6C9A8),
+  'mint': Color(0xFFE2F6D3),
+  'sage': Color(0xFFB4DDD3),
+  'fog': Color(0xFFD4E4ED),
+  'storm': Color(0xFFAECBFA),
+  'dusk': Color(0xFFD7AEFB),
+  'blossom': Color(0xFFF6E5EB),
+  'clay': Color(0xFFE8EAED),
+  'chalk': Color(0xFFFFFFFF)
+};
+
+const transparent = Colors.transparent;
+// END OF UTIL FUNCTIONS
+//========================================================
+const _uuid = Uuid();
+
+// Generate colorPairs from the maps
+// Dark mode : Light mode
+//   const Color(0xFF77172E): const Color(0xFFFAAFAF), // coral
+final colorPairs = Map.fromEntries(
+  darkColors.entries.map(
+    (entry) => MapEntry(
+      entry.value,
+      lightColors[entry.key]!,
+    ),
+  ),
+);
+
+final labelNames = [
+  'work',
+  'personal',
+  'urgent',
+  'shopping',
+  'ideas',
+  'travel',
+  'fitness',
+  'reading',
+  'chores',
+  'miscellaneous'
+];
 
 String getColorName(Color color) {
   return colors.entries
@@ -28,31 +85,37 @@ String getColorName(Color color) {
       .key;
 }
 
-Color _getNoteColor(int index) {
-  // final colors = [
-  //   Colors.orange[100],
-  //   Colors.yellow[100],
-  //   Colors.green[100],
-  //   Colors.blue[100],
-  //   Colors.purple[100],
-  //   Colors.pink[100]
-  // ];
+Color getThemeAwareColor(Color? color, Brightness brightness) {
+  if (color == null || color == Colors.transparent) {
+    return Colors.transparent;
+  }
 
+  return brightness == Brightness.dark
+      ? color // If dark theme, keep original color
+      : colorPairs[color] ??
+          Colors.transparent; // If light theme, get light variant
+}
+
+Color _getNoteColor(int index) {
   return colors.values.elementAt(index % colors.length);
 }
 
-const _uuid = Uuid();
 // final labelProvider = FutureProvider((ref) async {
 //   return ref.read(labelsProvider.notifier);
 // });
 final labelsProvider =
     NotifierProvider<LabelsNotifier, List<Label>>(LabelsNotifier.new);
 
+final notesProvider =
+    AsyncNotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
+
+final notesRepositoryProvider = Provider<NoteRepository>((ref) {
+  return InMemoryNoteRepository();
+});
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
 class LabelsNotifier extends Notifier<List<Label>> {
-  @override
-  List<Label> build() {
-    return [];
-  }
+  late final NoteRepository _repository;
 
   /// Adds a new label with the given [name].
   ///
@@ -60,139 +123,119 @@ class LabelsNotifier extends Notifier<List<Label>> {
   /// If a label with the specified name already exists, it returns the existing label.
   ///
   /// Returns the created or existing [Label].
-  Label addLabel(String name) {
+  Future<Label> addLabel(String name) async {
     // Check if label already exists by name
-    final existingLabel = state.firstWhere(
-      (label) => label.name == name,
-      orElse: () => Label(id: null, name: ""),
-    );
+    final existingLabel = await _repository.getLabelByName(name);
 
-    if (existingLabel.id == null) {
+    if (existingLabel == null) {
       // Create a new label if it doesn't exist
-      final newLabel = Label(id: state.length + 1, name: name);
+      final newLabel = Label(id: (state.length + 1).toString(), name: name);
       state = [...state, newLabel];
+      await _repository.createLabel(newLabel);
       return newLabel;
     }
     return existingLabel;
   }
 
-  void updateLabel(Label updatedLabel) {
+  @override
+  List<Label> build() {
+    _repository = ref.read(notesRepositoryProvider);
+    return [];
+    return [
+      Label(id: '1', name: 'work'),
+      Label(id: '2', name: 'personal'),
+      Label(id: '3', name: 'urgent'),
+      Label(id: '4', name: 'shopping'),
+      Label(id: '5', name: 'ideas'),
+      Label(id: '6', name: 'travel'),
+      Label(id: '7', name: 'fitness'),
+      Label(id: '8', name: 'reading'),
+      Label(id: '9', name: 'chores'),
+      Label(id: '10', name: 'miscellaneous')
+    ];
+  }
+
+  Future<void> deleteLabelById(String id) async {
+    state = state.where((label) => label.id != id).toList();
+    await _repository.deleteLabelById(id);
+  }
+
+  Future<Label?> getLabelById(String id) async {
+    return await _repository.getLabelById(id);
+  }
+
+  Future<List<Label>> getLabels() async {
+    return await _repository.getLabels();
+  }
+
+  Future<void> updateLabel(Label updatedLabel) async {
     state = [
       for (final label in state)
         if (label.id == updatedLabel.id) updatedLabel else label
     ];
-  }
-
-  void deleteLabelById(int id) {
-    state = state.where((label) => label.id != id).toList();
-  }
-
-  Label? getLabelById(int id) {
-    try {
-      return state.firstWhere((label) => label.id == id);
-    } catch (e) {
-      return null;
-    }
+    await _repository.updateLabel(updatedLabel);
   }
 }
 
-final notesProvider =
-    NotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
-final searchQueryProvider = StateProvider<String>((ref) => '');
-final notesRepositoryProvider = Provider<NoteRepository>((ref) {
-  return InMemoryNoteRepository();
-});
-
-class NotesNotifier extends Notifier<List<Note>> {
+class NotesNotifier extends AsyncNotifier<List<Note>> {
   late final NoteRepository _repository;
 
-  Future<void> _initializeNotes() async {
-    state = await _repository.getNotes();
-  }
-
   @override
-  List<Note> build() {
+  @override
+  Future<List<Note>> build() async {
     _repository = ref.read(notesRepositoryProvider);
     // return generateRandomNotes(10);
-    _initializeNotes();
+    // _initializeNotes();
+    state = const AsyncValue.data([]);
+    await _initializeNotes();
+    // state = AsyncValue.data(await _repository.getNotes());
+    // state = await AsyncValue.guard(() => _repository.getNotes());
+
+    // return await _repository.getNotes();
     return [];
   }
 
-  // NoteRepository(this.repository);
-
-  Future<List<Note>> getNotes() async {
-    state = await _repository.getNotes();
-    return state;
-  }
-
-  Future<Note?> getNoteById(String id) async {
-    // try {
-    //   return state.firstWhere((note) => note.id == id);
-    // } catch (e) {
-    //   return null;
-    // }
-    return await _repository.getNoteById(id);
-  }
-
   Future<Note> createNote(Note note, {int? position}) async {
-    final labelIds = note.labels
-        .map((name) => ref.read(labelsProvider.notifier).addLabel(name).name)
-        .toList();
+    initializeLabels();
+    final labelIds = await Future.wait(note.labels.map((noteLabel) async {
+      final label =
+          await ref.read(labelsProvider.notifier).addLabel(noteLabel.name);
+      return label;
+    }).toList());
     final updatedNote = note.copyWith(labels: labelIds);
     final newNote =
         await _repository.createNote(updatedNote, position: position);
-
     if (position != null) {
-      final newState = List<Note>.from(state);
+      final newState = List<Note>.from(state.value!);
       newState.insert(position, newNote);
-      state = newState;
+      state = AsyncValue.data(newState);
+      print(state);
     } else {
-      state = [newNote, ...state];
+      state = AsyncValue.data([newNote, ...state.value!]);
     }
-    // await _initializeNotes();
+    // state = await _repository.getNotes();
+    // state = await AsyncValue.guard(() => _repository.getNotes());
+
     return newNote;
   }
 
-  Future<void> updateNote(Note updatedNote) async {
-    state = [
-      for (final note in state)
-        if (note.id == updatedNote.id) updatedNote else note
-    ];
-    await _repository.updateNote(updatedNote);
-    // await _initializeNotes();
-  }
-
   Future<void> deleteNoteById(String id) async {
-    state = state.where((note) => note.id != id).toList();
-    await _repository.deleteNoteById(id);
-  }
+    // state = state.where((note) => note.id != id).toList();
+    // await _repository.deleteNoteById(id);
+    // Optimistically update the state
+    state =
+        AsyncValue.data(state.value!.where((note) => note.id != id).toList());
 
-  List<Note> searchNotes(String query) {
-    final results = state
-        .where((note) =>
-            note.title.toLowerCase().contains(query.toLowerCase()) ||
-            note.content.toLowerCase().contains(query.toLowerCase()))
-        .toList();
-    return results;
-    // return await _repository.searchNotes(query);
-  }
-
-  List<Label> getLabelsForNote(Note note) {
-    return note.labels
-        .map((label) =>
-            ref.read(labelsProvider.notifier).getLabelById(int.parse(label)))
-        .whereType<Label>()
-        .toList();
-  }
-
-  void initializeLabels() {
-    final labelsNotifier = ref.read(labelsProvider.notifier);
-    for (final name in labelNames) {
-      labelsNotifier.addLabel(name);
+    // Perform the backend deletion
+    try {
+      await _repository.deleteNoteById(id);
+    } catch (e) {
+      // If the backend deletion fails, revert the state
+      state = await AsyncValue.guard(() => _repository.getNotes());
     }
   }
 
-  List<Note> generateRandomNotes(int count) {
+  Future<List<Note>> generateRandomNotes(int count) async {
     final random = Random();
     final notes = <Note>[];
     final titles = [
@@ -232,6 +275,12 @@ class NotesNotifier extends Notifier<List<Note>> {
           .take(random.nextInt(3) + 1)
           .toList();
 
+      // Save labels to the label notifier
+      final labelIds = await Future.wait(noteLabels
+          .map((name) async =>
+              (await ref.read(labelsProvider.notifier).addLabel(name)))
+          .toList());
+      print(title);
       notes.add(Note(
         id: _uuid.v4(),
         title: title,
@@ -241,26 +290,93 @@ class NotesNotifier extends Notifier<List<Note>> {
         color: _getNoteColor(random.nextInt(colors.length)),
         images: [],
         reminder: null,
-        labels: noteLabels,
+        labels: labelIds,
       ));
     }
 
     return notes;
   }
+
+  List<Label> getLabelsForNote(Note note) {
+    return note.labels
+        .map((label) => label.id != null
+            ? ref.read(labelsProvider.notifier).getLabelById(label.id!)
+            : null)
+        .whereType<Label>()
+        .toList();
+  }
+
+  Future<Note?> getNoteById(String id) async {
+    // try {
+    //   print('${state.value?.firstWhere((note) => note.id == id).color} color');
+    //   print("getting note by id");
+    //   return state.value?.firstWhere((note) => note.id == id);
+    // } catch (e) {
+    //   return null;
+    // }
+    return await _repository.getNoteById(id);
+  }
+
+  // NoteRepository(this.repository);
+
+  Future<List<Note>> getNotes() async {
+    state = AsyncValue.data(await _repository.getNotes());
+    return state.value ?? [];
+  }
+
+  void initializeLabels() {
+    final labelsNotifier = ref.read(labelsProvider.notifier);
+    for (final name in labelNames) {
+      labelsNotifier.addLabel(name);
+    }
+  }
+
+  List<Note> searchNotes(String query) {
+    final results = state.value!
+        .where((note) =>
+            note.title.toLowerCase().contains(query.toLowerCase()) ||
+            note.content.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+    return results;
+  }
+
+  Future<void> updateNote(Note updatedNote) async {
+    // Optimistically update the state
+    state = AsyncValue.data([
+      for (final note in state.value!)
+        if (note.id == updatedNote.id) updatedNote else note
+    ]);
+
+    // Perform the backend update
+    try {
+      await _repository.updateNote(updatedNote);
+    } catch (e) {
+      // If the backend update fails, revert the state
+      state = await AsyncValue.guard(() => _repository.getNotes());
+    }
+  }
+
+  Future<void> _initializeNotes() async {
+    state = const AsyncLoading();
+    // state = AsyncValue.data(await _repository.getNotes());
+    state = await AsyncValue.guard(() => _repository.getNotes());
+  }
 }
 
-final labelNames = [
-  'work',
-  'personal',
-  'urgent',
-  'shopping',
-  'ideas',
-  'travel',
-  'fitness',
-  'reading',
-  'chores',
-  'miscellaneous'
-];
+// Create Color extension
+extension ThemeAwareColor on Color {
+  Color getThemeAwareColor(WidgetRef ref) {
+    if (this == Colors.transparent) return Colors.transparent;
+
+    final themeMode = ref.watch(themeModeProvider);
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                Brightness.dark);
+
+    return isDark ? this : colorPairs[this] ?? Colors.transparent;
+  }
+}
 
 // void addRandomNotes() {
 //   state = generateRandomNotes(7);

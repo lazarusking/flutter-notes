@@ -153,7 +153,7 @@ class DBHelper {
         color: Color(int.parse(noteMap['color'])),
         createdAt: DateTime.parse(noteMap['createdAt']),
         updatedAt: DateTime.parse(noteMap['updatedAt']),
-        labels: labelMaps.map((m) => m['label'] as String).toList(),
+        labels: labelMaps.map((m) => Label.fromJson(m)).toList(),
         images: imageMaps
             .map((m) => NoteImage(
                   id: m['id'],
@@ -281,6 +281,8 @@ class DBHelper {
     return results.map((json) => Note.fromJson(json)).toList();
   }
 
+//==========Labels=============================================
+
   Future<void> insertLabel(Label label) async {
     Database db = await database;
     await db.insert(
@@ -302,6 +304,53 @@ class DBHelper {
       'note_labels',
       {'note_id': noteId, 'label_id': labelId},
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteLabelById(String id) async {
+    Database db = await database;
+    await db.delete(
+      'labels',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<Label?> getLabelById(String id) async {
+    Database db = await database;
+    final List<Map<String, dynamic>> results = await db.query(
+      'labels',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (results.isNotEmpty) {
+      return Label.fromJson(results.first);
+    }
+    return null;
+  }
+
+  Future<Label?> getLabelByName(String name) async {
+    Database db = await database;
+    final List<Map<String, dynamic>> results = await db.query(
+      'labels',
+      where: 'name = ?',
+      whereArgs: [name],
+    );
+
+    if (results.isNotEmpty) {
+      return Label.fromJson(results.first);
+    }
+    return null;
+  }
+
+  Future<void> updateLabel(Label label) async {
+    Database db = await database;
+    await db.update(
+      'labels',
+      label.toJson(),
+      where: 'id = ?',
+      whereArgs: [label.id],
     );
   }
 

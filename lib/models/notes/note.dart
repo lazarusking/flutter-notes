@@ -18,7 +18,7 @@ class Note {
   String content = '';
   List<NoteImage> images = [];
   Reminder? reminder;
-  List<String> labels;
+  List<Label> labels;
 
   Note({
     required this.id,
@@ -36,7 +36,8 @@ class Note {
       title: '',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
-      color: const Color(0xFF202124));
+      color: Colors.transparent // Changed from Color(0xFF202124)
+      );
   Note copyWith({
     String? id,
     String? title,
@@ -46,7 +47,7 @@ class Note {
     String? content,
     List<NoteImage>? images,
     Reminder? reminder,
-    List<String>? labels,
+    List<Label>? labels,
   }) =>
       Note(
         id: id ?? this.id,
@@ -75,7 +76,7 @@ class Note {
         images: List<NoteImage>.from(
             json["images"].map((x) => NoteImage.fromJson(x))),
         reminder: Reminder.fromJson(json["reminder"]),
-        labels: List<String>.from(json["labels"].map((x) => x)),
+        labels: List<Label>.from(json["labels"].map((x) => Label.fromJson(x))),
       );
 
   Map<String, dynamic> toJson() => {
@@ -87,7 +88,7 @@ class Note {
         "content": content,
         "images": List<dynamic>.from(images.map((x) => x.toJson())),
         "reminder": reminder?.toJson(),
-        "labels": List<dynamic>.from(labels.map((x) => x))
+        "labels": List<dynamic>.from(labels.map((x) => x.toJson()))
       };
 }
 
@@ -159,7 +160,7 @@ class Reminder {
 }
 
 class Label {
-  int? id;
+  String? id;
   String name;
 
   Label({
@@ -168,7 +169,7 @@ class Label {
   });
 
   Label copyWith({
-    int? id,
+    String? id,
     String? name,
   }) =>
       Label(
@@ -185,6 +186,10 @@ class Label {
         "id": id,
         "name": name,
       };
+  @override
+  String toString() {
+    return 'Label{id: $id, name: $name}';
+  }
 }
 
 // {
